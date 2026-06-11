@@ -1,66 +1,75 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-export function RiskGauge({ score, size = 160 }) {
-  const prevScore = useRef(score);
-  const needleRef = useRef(null);
-
-  const color = score >= 70 ? 'var(--red)' : score >= 50 ? 'var(--amber)' : 'var(--green)';
-  const label = score >= 70 ? 'Critical' : score >= 50 ? 'Warning' : 'Low Risk';
-
-  // SVG gauge: 180° arc from left to right
-  const r = (size / 2) - 16;
-  const cx = size / 2;
-  const cy = size / 2 + 8;
-
-  function polarToXY(angleDeg, radius) {
-    const rad = (angleDeg - 180) * (Math.PI / 180);
-    return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) };
-  }
-
-  function arcPath(startDeg, endDeg, radius) {
-    const s = polarToXY(startDeg, radius);
-    const e = polarToXY(endDeg, radius);
-    const large = endDeg - startDeg > 180 ? 1 : 0;
-    return `M ${s.x} ${s.y} A ${radius} ${radius} 0 ${large} 1 ${e.x} ${e.y}`;
-  }
-
-  const needleAngle = score * 1.8; // 0→0°, 100→180°
-  const needleEnd = polarToXY(needleAngle, r - 8);
+// Animated semicircular risk gauge. Re-colors against thresholds and animates
+// score transitions over 0.6s ease.
+export default function RiskGauge({
+  score,
+  warningThreshold = 50,
+  criticalThreshold = 70,
+  size = 180,
+  label = 'Risk score',
+}) {
+  const [display, setDisplay] = useState(score);
+  const raf = useRef(null);
 
   useEffect(() => {
-    prevScore.current = score;
+    const from = display;
+    const to = score;
+    if (from === to) return;
+    const start = performance.now();
+    const duration = 600;
+    const ease = (t) => 1 - Math.pow(1 - t, 3);
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      setDisplay(Math.round(from + (to - from) * ease(t)));
+      if (t < 1) raf.current = requestAnimationFrame(tick);
+    };
+    raf.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [score]);
 
+  const color =
+    display >= criticalThreshold ? 'var(--red)' : display >= warningThreshold ? 'var(--amber)' : 'var(--green)';
+  const tier = display >= criticalThreshold ? 'Critical' : display >= warningThreshold ? 'Warning' : 'Watch';
+
+  const w = size;
+  const h = size * 0.62;
+  const cx = w / 2;
+  const cy = h - 8;
+  const r = w / 2 - 14;
+  const angle = Math.PI * (1 - display / 100); // 100 → 0 rad, 0 → π
+  const needleX = cx + r * 0.78 * Math.cos(angle);
+  const needleY = cy - r * 0.78 * Math.sin(angle);
+
+  const arc = (from, to, stroke, swidth) => {
+    const a1 = Math.PI * (1 - from / 100);
+    const a2 = Math.PI * (1 - to / 100);
+    const x1 = cx + r * Math.cos(a1);
+    const y1 = cy - r * Math.sin(a1);
+    const x2 = cx + r * Math.cos(a2);
+    const y2 = cy - r * Math.sin(a2);
+    return <path d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`} fill="none" stroke={stroke} strokeWidth={swidth} strokeLinecap="round" />;
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <svg width={size} height={size / 2 + 24} style={{ overflow: 'visible' }}>
-        {/* Track */}
-        <path d={arcPath(0, 180, r)} fill="none" stroke="var(--border)" strokeWidth={10} strokeLinecap="round" />
-        {/* Green zone 0-50 */}
-        <path d={arcPath(0, 90, r)} fill="none" stroke="var(--green)" strokeWidth={10} strokeLinecap="round" opacity={0.25} />
-        {/* Amber zone 50-70 */}
-        <path d={arcPath(90, 126, r)} fill="none" stroke="var(--amber)" strokeWidth={10} strokeLinecap="round" opacity={0.25} />
-        {/* Red zone 70-100 */}
-        <path d={arcPath(126, 180, r)} fill="none" stroke="var(--red)" strokeWidth={10} strokeLinecap="round" opacity={0.25} />
-        {/* Score arc */}
-        <path d={arcPath(0, needleAngle, r)} fill="none" stroke={color} strokeWidth={10} strokeLinecap="round" style={{ transition: 'all 0.6s ease' }} />
-        {/* Needle */}
-        <line
-          ref={needleRef}
-          x1={cx} y1={cy}
-          x2={needleEnd.x} y2={needleEnd.y}
-          stroke={color} strokeWidth={3} strokeLinecap="round"
-          style={{ transition: 'all 0.6s ease' }}
-        />
-        <circle cx={cx} cy={cy} r={5} fill={color} style={{ transition: 'fill 0.6s ease' }} />
-        {/* Score */}
-        <text x={cx} y={cy - 6} textAnchor="middle" fontSize={28} fontWeight={700} fontFamily="DM Mono" fill={color} style={{ transition: 'fill 0.6s ease' }}>
-          {score}
-        </text>
-        <text x={cx} y={cy + 16} textAnchor="middle" fontSize={11} fill="var(--ink-3)" fontFamily="DM Sans">
-          {label}
-        </text>
+    <div className="flex flex-col items-center" role="img" aria-label={`${label}: ${display} out of 100, ${tier} tier`}>
+      <svg width={w} height={h} aria-hidden="true">
+        {arc(0, warningThreshold, 'var(--green-border)', 8)}
+        {arc(warningThreshold, criticalThreshold, 'var(--amber-border)', 8)}
+        {arc(criticalThreshold, 100, 'var(--red-border)', 8)}
+        {arc(0, Math.max(1, display), color, 8)}
+        <line x1={cx} y1={cy} x2={needleX} y2={needleY} stroke={color} strokeWidth="3" strokeLinecap="round" style={{ transition: 'all 0.6s ease' }} />
+        <circle cx={cx} cy={cy} r="5" fill={color} style={{ transition: 'fill 0.6s ease' }} />
       </svg>
+      <div className="-mt-2 text-center">
+        <div className="font-mono text-3xl font-medium" style={{ color, transition: 'color 0.6s ease' }}>
+          {display}
+        </div>
+        <div className="text-[10px] font-medium uppercase tracking-wide text-ink-4">
+          {label} · <span style={{ color }}>{tier}</span>
+        </div>
+      </div>
     </div>
   );
 }

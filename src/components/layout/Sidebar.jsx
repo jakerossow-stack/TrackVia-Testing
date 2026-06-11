@@ -1,76 +1,76 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { useAppStore } from '../../store/appStore';
+import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Radio, FolderKanban, Library,
-  History, BarChart3, Brain,
-  ClipboardList, Shield, Settings, ChevronRight,
+  Activity,
+  Radio,
+  FolderKanban,
+  Library,
+  History,
+  Target,
+  ClipboardList,
+  ShieldCheck,
+  Settings,
+  Users,
 } from 'lucide-react';
+import { useSignalCounts } from '../../hooks/useSignals';
+import { FedRampChip } from '../shared/ui';
 
-const NAV = [
-  { section: 'MONITORING', items: [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Risk Dashboard' },
-    { to: '/signals', icon: Radio, label: 'Signal Feed', badge: 'signals' },
-    { to: '/projects', icon: FolderKanban, label: 'Projects' },
-    { to: '/patterns', icon: Library, label: 'Pattern Library' },
-  ]},
-  { section: 'INTELLIGENCE', items: [
-    { to: '/intelligence/history', icon: History, label: 'Prediction History' },
-    { to: '/intelligence/accuracy', icon: BarChart3, label: 'Accuracy Report' },
-  ]},
-  { section: 'OPERATIONS', items: [
-    { to: '/workforce', icon: Brain, label: 'Workforce' },
-    { to: '/compliance', icon: Shield, label: 'Compliance Log' },
-    { to: '/settings', icon: Settings, label: 'Settings' },
-  ]},
-];
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
+function NavItem({ to, icon: Icon, label, badge, end }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `group flex items-center gap-2.5 rounded-btn px-2.5 py-2 text-xs font-medium transition-colors ${
+          isActive ? 'bg-red-bg text-red' : 'text-ink-3 hover:bg-surface hover:text-ink'
+        }`
+      }
+      title={label}
+    >
+      <Icon size={15} className="shrink-0" aria-hidden="true" />
+      <span className="hidden flex-1 truncate lg:block">{label}</span>
+      {badge != null && badge > 0 && (
+        <span className="hidden rounded-[20px] bg-red px-1.5 py-0.5 font-mono text-[9px] font-medium leading-none text-white lg:block">
+          {badge}
+        </span>
+      )}
+    </NavLink>
+  );
+}
+
+function SectionLabel({ children }) {
+  return <div className="mb-1 mt-4 hidden px-2.5 text-[9px] font-bold uppercase tracking-[0.12em] text-ink-4 first:mt-0 lg:block">{children}</div>;
+}
 
 export function Sidebar() {
-  const signals = useAppStore(s => s.signals);
-  const activeCount = signals.filter(s => s.status === 'active').length;
-
+  const counts = useSignalCounts();
   return (
-    <div style={{
-      width: 220, minHeight: '100vh', background: 'var(--surface-2)',
-      borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column',
-      flexShrink: 0,
-    }}>
-      <div style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
-        {NAV.map(({ section, items }) => (
-          <div key={section} style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-4)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '4px 8px', marginBottom: 4 }}>
-              {section}
-            </div>
-            {items.map(({ to, icon: Icon, label, badge }) => (
-              <NavLink key={to} to={to} style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', borderRadius: 8,
-                textDecoration: 'none', fontSize: 13, fontWeight: isActive ? 600 : 400,
-                color: isActive ? 'var(--ink)' : 'var(--ink-3)',
-                background: isActive ? 'var(--surface)' : 'transparent',
-                borderLeft: isActive ? '2px solid var(--red)' : '2px solid transparent',
-                marginBottom: 1,
-              })}>
-                <Icon size={15} aria-hidden="true" />
-                <span style={{ flex: 1 }}>{label}</span>
-                {badge === 'signals' && activeCount > 0 && (
-                  <span style={{ background: 'var(--red)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10 }}>{activeCount}</span>
-                )}
-              </NavLink>
-            ))}
-          </div>
-        ))}
-      </div>
+    <nav className="sticky top-12 flex h-[calc(100vh-48px)] w-14 shrink-0 flex-col border-r border-bdr bg-surface-2 p-2 lg:w-[220px] lg:p-3" aria-label="Primary">
+      <div className="flex-1 overflow-y-auto panel-scroll">
+        <SectionLabel>Monitoring</SectionLabel>
+        <NavItem to="/dashboard" icon={Activity} label="Risk Dashboard" />
+        <NavItem to="/signals" icon={Radio} label="Signal Feed" badge={counts.total} end />
+        <NavItem to="/projects" icon={FolderKanban} label="Projects" end />
+        <NavItem to="/patterns" icon={Library} label="Pattern Library" />
 
-      {/* FedRAMP badge */}
-      <div style={{
-        margin: 8, padding: '8px 10px', background: 'var(--blue-bg)', border: '1px solid var(--blue-border)',
-        borderRadius: 8, display: 'flex', alignItems: 'flex-start', gap: 8,
-      }}>
-        <Shield size={14} color="var(--blue)" style={{ marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
-        <div>
-          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--blue)' }}>FedRAMP Moderate</p>
-          <p style={{ fontSize: 10, color: 'var(--ink-4)', lineHeight: 1.4, marginTop: 1 }}>All data stays within your authorization boundary</p>
-        </div>
+        <SectionLabel>Intelligence</SectionLabel>
+        <NavItem to="/intelligence/history" icon={History} label="Prediction History" />
+        <NavItem to="/intelligence/accuracy" icon={Target} label="Accuracy Report" />
+        <NavItem to="/workforce" icon={Users} label="Workforce" end />
+
+        <SectionLabel>Operations</SectionLabel>
+        <NavItem to="/signals?status=active" icon={ClipboardList} label="Work Orders" />
+        <NavItem to="/compliance" icon={ShieldCheck} label="Compliance Log" />
+        <NavItem to="/settings" icon={Settings} label="Settings" />
       </div>
-    </div>
+      <div className="hidden lg:block">
+        <FedRampChip />
+      </div>
+      <div className="flex justify-center lg:hidden" title="FedRAMP Moderate Authorized">
+        <ShieldCheck size={16} className="text-blue" aria-label="FedRAMP Moderate Authorized" />
+      </div>
+    </nav>
   );
 }

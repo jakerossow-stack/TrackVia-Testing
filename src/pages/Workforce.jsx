@@ -1,121 +1,141 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowUpDown, Users } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { UtilizationHeatmap } from '../components/charts/UtilizationHeatmap';
-import { SkillsChart } from '../components/charts/SkillsChart';
-import { Users, AlertTriangle, TrendingUp, Star } from 'lucide-react';
+import { UtilizationHeatmap, SkillsChart } from '../components/charts/UtilizationHeatmap';
+import { ClearanceBadge, StatCard, EmptyState, utilColor } from '../components/shared/ui';
 
-function utilColor(v) {
-  if (v > 100) return 'var(--red)';
-  if (v >= 80) return 'var(--amber)';
-  return 'var(--green)';
-}
+const COLUMNS = [
+  { key: 'name', label: 'Name' },
+  { key: 'role', label: 'Role' },
+  { key: 'utilizationPercent', label: 'Utilization' },
+  { key: 'avgMatchScore', label: 'Avg match' },
+  { key: 'onTimeRate', label: 'On-time' },
+  { key: 'weeklyTaskCount', label: 'Active tasks' },
+  { key: 'skills', label: 'Top skills', sortable: false },
+  { key: 'clearanceLevel', label: 'Clearance', sortable: false },
+];
 
-const CLEARANCE_LABELS = { none: 'None', confidential: 'Confidential', secret: 'Secret', top_secret: 'Top Secret' };
-const CLEARANCE_COLORS = { none: 'var(--ink-4)', confidential: 'var(--blue)', secret: 'var(--amber)', top_secret: 'var(--red)' };
-
-export function Workforce() {
-  const employees = useAppStore(s => s.employees);
+export default function Workforce() {
   const navigate = useNavigate();
-  const [sortCol, setSortCol] = useState('name');
-  const [sortAsc, setSortAsc] = useState(true);
+  const employees = useAppStore((s) => s.employees.filter((e) => e.active));
+  const [sortKey, setSortKey] = useState('utilizationPercent');
+  const [sortDir, setSortDir] = useState('desc');
 
-  const overCapacity = employees.filter(e => e.utilizationPercent > 100).length;
-  const avgUtil = Math.round(employees.reduce((s, e) => s + e.utilizationPercent, 0) / employees.length);
-  const avgMatch = Math.round(employees.reduce((s, e) => s + e.avgMatchScore, 0) / employees.length);
-
-  function sortedEmps() {
-    return [...employees].sort((a, b) => {
-      const va = a[sortCol], vb = b[sortCol];
-      if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
-      return sortAsc ? va - vb : vb - va;
+  const sorted = useMemo(() => {
+    const list = [...employees];
+    list.sort((a, b) => {
+      const av = a[sortKey]; const bv = b[sortKey];
+      const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
+      return sortDir === 'asc' ? cmp : -cmp;
     });
-  }
+    return list;
+  }, [employees, sortKey, sortDir]);
 
-  function TH({ col, label }) {
+  const toggleSort = (key) => {
+    if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key); setSortDir('desc'); }
+  };
+
+  const avgUtil = Math.round(employees.reduce((a, e) => a + e.utilizationPercent, 0) / Math.max(employees.length, 1));
+  const overCap = employees.filter((e) => e.utilizationPercent > 100).length;
+  const avgMatch = Math.round(employees.reduce((a, e) => a + e.avgMatchScore, 0) / Math.max(employees.length, 1));
+
+  if (employees.length === 0) {
     return (
-      <th
-        onClick={() => { if (sortCol === col) setSortAsc(!sortAsc); else { setSortCol(col); setSortAsc(true); } }}
-        style={{ textAlign: 'left', fontSize: 11, color: sortCol === col ? 'var(--ink)' : 'var(--ink-4)', fontWeight: sortCol === col ? 600 : 500, padding: '0 0 10px', cursor: 'pointer', whiteSpace: 'nowrap', paddingRight: 16 }}
-      >{label} {sortCol === col ? (sortAsc ? '↑' : '↓') : ''}</th>
+      <div className="p-6">
+        <EmptyState icon={Users} iconClass="text-ink-4" title="No active team members"
+          message="Add employees in Settings → Team to begin capacity monitoring." />
+      </div>
     );
   }
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700 }}>Workforce Overview</h1>
+    <div className="mx-auto max-w-[1200px] p-6">
+      <h1 className="font-display text-xl font-bold text-ink">Workforce</h1>
+      <p className="mt-0.5 text-sm text-ink-3">Capacity, skill coverage, and scheduling fitness across the team</p>
 
-      {/* Stats */}
-      <div style={{ display: 'flex', gap: 12 }}>
-        {[
-          { label: 'Total Staff', value: employees.length, icon: Users, color: 'var(--ink)' },
-          { label: 'Avg Utilization', value: `${avgUtil}%`, icon: TrendingUp, color: utilColor(avgUtil) },
-          { label: 'Over Capacity', value: overCapacity, icon: AlertTriangle, color: overCapacity > 0 ? 'var(--red)' : 'var(--green)' },
-          { label: 'Avg Match Score', value: `${avgMatch}%`, icon: Star, color: 'var(--blue)' },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} style={{ flex: 1, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 18px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <p style={{ fontSize: 11, color: 'var(--ink-4)', textTransform: 'uppercase' }}>{label}</p>
-              <Icon size={15} color={color} aria-hidden="true" />
-            </div>
-            <p style={{ fontSize: 26, fontWeight: 700, fontFamily: 'DM Mono', color }}>{value}</p>
-          </div>
-        ))}
+      <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Total staff" value={employees.length} sub="Active field + compliance" />
+        <StatCard label="Avg utilization" value={`${avgUtil}%`} valueClass={utilColor(avgUtil)} sub="Healthy band: 60–80%" />
+        <StatCard label="Over capacity" value={overCap} valueClass={overCap > 0 ? 'text-red' : 'text-green'} sub=">100% sustained utilization" />
+        <StatCard label="Avg match score" value={avgMatch} valueClass="text-blue" sub="Skill-to-task fit across assignments" />
       </div>
 
-      <UtilizationHeatmap employees={employees} />
-      <SkillsChart employees={employees} />
+      {/* Heatmap */}
+      <section className="mt-5 rounded-card border border-bdr bg-surface-2 p-5">
+        <h2 className="font-display text-sm font-bold text-ink">Utilization heatmap — this week</h2>
+        <p className="mt-0.5 text-xs text-ink-4">Click any cell to see that day&rsquo;s assignment</p>
+        <div className="mt-4">
+          <UtilizationHeatmap employees={employees} />
+        </div>
+      </section>
 
       {/* Table */}
-      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, overflowX: 'auto' }}>
-        <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Team Directory</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
-          <thead>
-            <tr>
-              <TH col="name" label="Name" />
-              <TH col="role" label="Role" />
-              <TH col="utilizationPercent" label="Utilization" />
-              <TH col="avgMatchScore" label="Match Score" />
-              <TH col="onTimeRate" label="On-Time Rate" />
-              <TH col="weeklyTaskCount" label="Tasks" />
-              <th style={{ fontSize: 11, color: 'var(--ink-4)', paddingBottom: 10, textAlign: 'left', paddingRight: 16 }}>Clearance</th>
-              <th style={{ fontSize: 11, color: 'var(--ink-4)', paddingBottom: 10, textAlign: 'left' }}>Top Skills</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedEmps().map(emp => {
-              const topSkills = Object.entries(emp.skills).sort((a, b) => b[1] - a[1]).slice(0, 3);
-              return (
-                <tr key={emp.id} onClick={() => navigate(`/workforce/${emp.id}`)} style={{ cursor: 'pointer', borderTop: '1px solid var(--border)' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <td style={{ padding: '10px 16px 10px 0', fontSize: 13, fontWeight: 600 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 7, background: CLEARANCE_COLORS[emp.clearanceLevel], display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 700 }}>{emp.initials}</div>
-                      {emp.name}
-                    </div>
-                  </td>
-                  <td style={{ padding: '10px 16px 10px 0', fontSize: 12, color: 'var(--ink-3)' }}>{emp.role}</td>
-                  <td style={{ padding: '10px 16px 10px 0', fontSize: 12, fontFamily: 'DM Mono', fontWeight: 600, color: utilColor(emp.utilizationPercent) }}>{emp.utilizationPercent}%</td>
-                  <td style={{ padding: '10px 16px 10px 0', fontSize: 12, fontFamily: 'DM Mono' }}>{emp.avgMatchScore}%</td>
-                  <td style={{ padding: '10px 16px 10px 0', fontSize: 12, fontFamily: 'DM Mono' }}>{emp.onTimeRate}%</td>
-                  <td style={{ padding: '10px 16px 10px 0', fontSize: 12, fontFamily: 'DM Mono' }}>{emp.weeklyTaskCount}</td>
-                  <td style={{ padding: '10px 16px 10px 0' }}>
-                    <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, background: 'var(--surface)', border: '1px solid var(--border)', color: CLEARANCE_COLORS[emp.clearanceLevel], fontWeight: 600 }}>
-                      {CLEARANCE_LABELS[emp.clearanceLevel]}
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 0', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {topSkills.map(([skill, score]) => (
-                      <span key={skill} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--ink-3)' }}>{skill} {score}</span>
-                    ))}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <section className="mt-5 overflow-hidden rounded-card border border-bdr bg-surface-2">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[840px] text-sm">
+            <thead>
+              <tr className="border-b border-bdr bg-surface text-left">
+                {COLUMNS.map((c) => (
+                  <th key={c.key} className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-ink-4">
+                    {c.sortable === false ? c.label : (
+                      <button onClick={() => toggleSort(c.key)} className="inline-flex items-center gap-1 rounded px-1 hover:text-ink-2">
+                        {c.label} <ArrowUpDown size={11} aria-hidden="true" className={sortKey === c.key ? 'text-ink-2' : ''} />
+                      </button>
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((e) => {
+                const topSkills = Object.entries(e.skills).sort((a, b) => b[1] - a[1]).slice(0, 3);
+                return (
+                  <tr
+                    key={e.id}
+                    onClick={() => navigate(`/workforce/${e.id}`)}
+                    onKeyDown={(ev) => ev.key === 'Enter' && navigate(`/workforce/${e.id}`)}
+                    tabIndex={0}
+                    className="cursor-pointer border-b border-bdr last:border-0 hover:bg-surface focus-visible:bg-surface"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-avatar bg-ink text-[11px] font-bold text-white">{e.initials}</span>
+                        <span className="font-medium text-ink">{e.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-ink-3">{e.role}</td>
+                    <td className={`px-4 py-3 font-mono font-medium ${utilColor(e.utilizationPercent)}`}>{e.utilizationPercent}%</td>
+                    <td className="px-4 py-3 font-mono text-ink-2">{e.avgMatchScore}</td>
+                    <td className="px-4 py-3 font-mono text-ink-2">{e.onTimeRate}%</td>
+                    <td className="px-4 py-3 font-mono text-ink-2">{e.weeklyTaskCount}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {topSkills.map(([name, score]) => (
+                          <span key={name} className="rounded-pill border border-bdr bg-surface px-2 py-0.5 text-[10px] text-ink-3">
+                            {name} <span className="font-mono text-ink-4">{score}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3"><ClearanceBadge level={e.clearanceLevel} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Skills gap */}
+      <section className="mt-5 rounded-card border border-bdr bg-surface-2 p-5">
+        <h2 className="font-display text-sm font-bold text-ink">Skill coverage vs industry benchmark</h2>
+        <p className="mt-0.5 text-xs text-ink-4">Team averages by skill area — gaps vs benchmark highlighted in red</p>
+        <div className="mt-4">
+          <SkillsChart employees={employees} />
+        </div>
+      </section>
     </div>
   );
 }

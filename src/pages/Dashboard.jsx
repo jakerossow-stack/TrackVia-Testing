@@ -1,220 +1,209 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import * as Icons from 'lucide-react';
 import { useAppStore } from '../store/appStore';
+import { useActiveSignals, useSignalCounts } from '../hooks/useSignals';
+import { useMostCriticalProject } from '../hooks/useProjects';
+import RiskTimeline from '../components/charts/RiskTimeline';
 import { SignalCard } from '../components/shared/SignalCard';
-import { SeverityBadge } from '../components/shared/SeverityBadge';
-import { RiskTimeline } from '../components/charts/RiskTimeline';
-import { DetailPanel } from '../components/layout/DetailPanel';
-import { PATTERN_TYPES } from '../store/seedData';
-import {
-  AlertTriangle, TrendingUp, CheckCircle2, Target, Loader2, X, ArrowRight,
-  Search, ArrowLeftRight, Clock, Wrench, UserX, FileText, BellOff,
-} from 'lucide-react';
-import toast from 'react-hot-toast';
+import { StatCard } from '../components/shared/ui';
+import { PATTERN_LIBRARY } from '../store/seedData';
 
-const ICON_MAP = { Search, ArrowLeftRight, Clock, Wrench, UserX, TrendingUp, FileText, BellOff, AlertTriangle };
+const TIER_BADGE = {
+  'Critical predictor': 'bg-red-bg border-red-bdr text-red',
+  'Warning predictor': 'bg-amber-bg border-amber-bdr text-amber',
+  Watch: 'bg-blue-bg border-blue-bdr text-blue',
+};
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-
-function StatCard({ label, value, subtext, color, icon: Icon }) {
+function PatternGrid() {
+  const navigate = useNavigate();
+  const active = useActiveSignals();
   return (
-    <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px', flex: 1, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <p style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
-        {Icon && <Icon size={16} color={color} aria-hidden="true" />}
-      </div>
-      <p style={{ fontSize: 30, fontWeight: 700, color: color || 'var(--ink)', fontFamily: 'DM Mono', marginBottom: 2 }}>{value}</p>
-      {subtext && <p style={{ fontSize: 11, color: 'var(--ink-4)' }}>{subtext}</p>}
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {PATTERN_LIBRARY.map((p) => {
+        const Icon = Icons[p.icon] || Icons.Activity;
+        const count = active.filter((s) => s.patternType === p.type).length;
+        return (
+          <button
+            key={p.type}
+            onClick={() => navigate('/patterns')}
+            className="rounded-card border border-bdr bg-surface-2 p-3.5 text-left transition-colors hover:border-bdr-2"
+          >
+            <div className="flex items-start justify-between">
+              <span className="flex h-8 w-8 items-center justify-center rounded-btn bg-surface text-ink-3">
+                <Icon size={16} aria-hidden="true" />
+              </span>
+              {count > 0 && (
+                <span className="rounded-[20px] bg-red px-1.5 py-0.5 font-mono text-[10px] font-medium text-white">{count} active</span>
+              )}
+            </div>
+            <div className="mt-2 text-xs font-semibold text-ink">{p.name}</div>
+            <div className="mt-0.5 text-[11px] leading-snug text-ink-3">{p.description}</div>
+            <span className={`mt-2 inline-block rounded-badge border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${TIER_BADGE[p.tier]}`}>
+              {p.tier}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function AlertStack({ signals, onSelect, dismissedIds, onDismiss }) {
-  const active = signals.filter(s => s.status === 'active' && !dismissedIds.includes(s.id)).slice(0, 3);
-  if (!active.length) return null;
-
+function BeforeAfter({ project }) {
   return (
-    <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 50, width: 320, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {active.map((sig, i) => (
-        <div key={sig.id} style={{
-          background: 'var(--surface-2)', border: `1px solid ${sig.severity === 'critical' ? 'var(--red-border)' : 'var(--amber-border)'}`,
-          borderRadius: 10, padding: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-          animation: 'fade-in 0.3s ease-out',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <SeverityBadge severity={sig.severity} />
-              <p style={{ fontSize: 12, fontWeight: 600, marginTop: 6, lineHeight: 1.4 }}>{sig.title.slice(0, 60)}...</p>
-              <p style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 3, fontFamily: 'DM Mono' }}>~{sig.estimatedTimeToIncident} to incident</p>
-            </div>
-            <button onClick={() => onDismiss(sig.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)', padding: 2 }}>
-              <X size={12} aria-hidden="true" />
-            </button>
-          </div>
-          <button
-            onClick={() => onSelect(sig)}
-            style={{ marginTop: 8, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 0', background: sig.severity === 'critical' ? 'var(--red-bg)' : 'var(--amber-bg)', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: sig.severity === 'critical' ? 'var(--red)' : 'var(--amber)' }}
-          >
-            Act now <ArrowRight size={11} aria-hidden="true" />
-          </button>
-        </div>
-      ))}
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="rounded-card border border-red-bdr bg-red-bg p-4">
+        <div className="text-[10px] font-bold uppercase tracking-wide text-red">Without Signal</div>
+        <div className="mt-1 text-xs font-semibold text-ink">{project?.name} — projected sequence</div>
+        <ol className="mt-3 space-y-2.5">
+          {[
+            ['Day 14', 'Warning patterns invisible — buried across 4 separate systems'],
+            ['Day 24', 'Structural inspection missed; nobody assigned to follow up'],
+            ['Day 31', 'Stop-work order issued during routine government site visit'],
+            ['Day 31+', '11-day schedule slip, DFARS finding, ~$84K in delay costs'],
+          ].map(([day, txt]) => (
+            <li key={day} className="flex gap-2.5 text-[11px] leading-snug">
+              <span className="w-12 shrink-0 font-mono font-medium text-red">{day}</span>
+              <span className="text-ink-2">{txt}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div className="rounded-card border border-green-bdr bg-green-bg p-4">
+        <div className="text-[10px] font-bold uppercase tracking-wide text-green">With Signal</div>
+        <div className="mt-1 text-xs font-semibold text-ink">{project?.name} — actual sequence</div>
+        <ol className="mt-3 space-y-2.5">
+          {[
+            ['Day 14', 'Composite alert fired the moment the warning threshold was crossed'],
+            ['Day 15', 'Four targeted actions assigned: inspection, ownership, escalation, docs'],
+            ['Day 22', 'Inspection completed 9 days before the projected incident window'],
+            ['Day 31', 'No stop-work. Schedule held. ~$84K avoided.'],
+          ].map(([day, txt]) => (
+            <li key={day} className="flex gap-2.5 text-[11px] leading-snug">
+              <span className="w-12 shrink-0 font-mono font-medium text-green">{day}</span>
+              <span className="text-ink-2">{txt}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
     </div>
   );
 }
 
-export function Dashboard() {
-  const signals = useAppStore(s => s.signals);
-  const projects = useAppStore(s => s.projects);
-  const organization = useAppStore(s => s.organization);
-  const dismissAlert = useAppStore(s => s.dismissAlert);
-  const dismissedAlerts = useAppStore(s => s.dismissedAlerts) || [];
+function AlertStack({ onAct }) {
+  const active = useActiveSignals();
+  const [hidden, setHidden] = useState([]);
+  const [leaving, setLeaving] = useState([]);
+  const visible = active.filter((s) => !hidden.includes(s.id)).slice(0, 3);
 
-  const [selectedSignal, setSelectedSignal] = useState(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [localDismissed, setLocalDismissed] = useState([]);
+  if (visible.length === 0) return null;
+  return (
+    <div className="pointer-events-none fixed bottom-5 right-5 z-30 flex flex-col-reverse items-end gap-2.5">
+      {visible
+        .slice()
+        .reverse()
+        .map((sig, i) => (
+          <div
+            key={sig.id}
+            className={`pointer-events-auto transition-all ${leaving.includes(sig.id) ? 'animate-slideOutRight' : 'animate-slideUp'}`}
+            style={{ zIndex: 30 + i }}
+          >
+            <SignalCard
+              signal={sig}
+              compact
+              onAct={() => onAct(sig.id)}
+              onDismissed={() => {
+                setLeaving((l) => [...l, sig.id]);
+                setTimeout(() => setHidden((h) => [...h, sig.id]), 360);
+              }}
+            />
+          </div>
+        ))}
+      {active.length > 3 && (
+        <div className="pointer-events-auto w-72 rounded-card border border-bdr bg-surface-2 px-3 py-1.5 text-center font-mono text-[10px] text-ink-4 shadow-modal">
+          +{active.length - 3} more in feed
+        </div>
+      )}
+    </div>
+  );
+}
 
-  const activeSignals = signals.filter(s => s.status === 'active');
-  const criticalSignals = activeSignals.filter(s => s.severity === 'critical');
-  const warningSignals = activeSignals.filter(s => s.severity === 'warning');
-  const watchSignals = activeSignals.filter(s => s.severity === 'watch');
-  const avgRisk = Math.round(projects.reduce((s, p) => s + p.riskScore, 0) / projects.length);
-  const criticalProject = projects.reduce((a, b) => a.riskScore > b.riskScore ? a : b);
+export default function Dashboard() {
+  const { openDrawer } = useOutletContext() || {};
+  const navigate = useNavigate();
+  const { projects, predictions, selectSignal, signals } = useAppStore();
+  const counts = useSignalCounts();
+  const criticalProject = useMostCriticalProject();
 
-  useEffect(() => {
-    if (!selectedSignal && activeSignals.length > 0) {
-      setSelectedSignal(activeSignals[0]);
-    }
-  }, []);
+  const stats = useMemo(() => {
+    const activeProjects = projects.filter((p) => p.status !== 'completed');
+    const avgRisk = Math.round(activeProjects.reduce((s, p) => s + p.riskScore, 0) / (activeProjects.length || 1));
+    const verified = predictions.filter((p) => p.correct !== null);
+    const correct = verified.filter((p) => p.correct).length;
+    const accuracy = verified.length ? Math.round((correct / verified.length) * 100) : 0;
+    const prevented = predictions.filter((p) => p.correct && p.costAvoided > 0);
+    const avoided = prevented.reduce((s, p) => s + p.costAvoided, 0);
+    return { avgRisk, accuracy, prevented: prevented.length, avoided };
+  }, [projects, predictions]);
 
-  async function handleRunScan() {
-    setIsScanning(true);
-    toast('Signal is scanning behavioral patterns...', { icon: '🔍' });
-    try {
-      const res = await fetch(`${API_BASE}/api/run-scan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ organizationData: organization }),
-      });
-      const data = await res.json();
-      toast.success(`Scan complete — ${data.patternsUpdated} patterns updated, ${data.newSignalsDetected} new signals`);
-    } catch {
-      toast.error('Scan failed — check your connection');
-    } finally {
-      setIsScanning(false);
-    }
-  }
+  const handleSelect = (id) => {
+    selectSignal(id);
+    openDrawer?.();
+  };
 
-  function handleDismissAlert(id) {
-    setLocalDismissed(prev => [...prev, id]);
-    dismissAlert(id);
-    toast('Dismissed — Signal will continue monitoring', { icon: '👁️' });
-  }
-
-  const allDismissed = [...dismissedAlerts, ...localDismissed];
+  const handleTimelineEvent = (payload) => {
+    if (!payload.triggerType) return;
+    const match = signals.find((s) => s.projectId === criticalProject.id && s.patternType === payload.triggerType && s.status === 'active');
+    handleSelect((match || signals.find((s) => s.projectId === criticalProject.id && s.status === 'active'))?.id);
+  };
 
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-      {/* Main content */}
-      <div style={{ flex: 1, padding: 24, overflowY: 'auto', minWidth: 0 }}>
-
-        {/* Header row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700 }}>Risk Dashboard</h1>
-            <p style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>Meridian Defense Contractors · {activeSignals.length} active signals</p>
-          </div>
-          <button
-            onClick={handleRunScan} disabled={isScanning}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 7, cursor: isScanning ? 'not-allowed' : 'pointer',
-              background: isScanning ? 'var(--surface)' : 'var(--ink)', color: isScanning ? 'var(--ink-3)' : '#fff',
-              border: `1px solid ${isScanning ? 'var(--border)' : 'var(--ink)'}`, fontSize: 13, fontWeight: 500,
-            }}
-          >
-            {isScanning ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} aria-hidden="true" /> : <Target size={14} aria-hidden="true" />}
-            {isScanning ? 'Scanning...' : 'Run scan now'}
-          </button>
-        </div>
-
-        {/* Stat cards */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-          <StatCard label="Avg Risk Score" value={avgRisk} subtext="↑ +8 vs last week" color={avgRisk >= 70 ? 'var(--red)' : avgRisk >= 50 ? 'var(--amber)' : 'var(--green)'} icon={AlertTriangle} />
-          <StatCard label="Active Signals" value={activeSignals.length} subtext={`${criticalSignals.length} critical · ${warningSignals.length} warning · ${watchSignals.length} watch`} color="var(--amber)" icon={TrendingUp} />
-          <StatCard label="Incidents Prevented" value="12" subtext="Est. $240K cost avoidance" color="var(--green)" icon={CheckCircle2} />
-          <StatCard label="Prediction Accuracy" value="89%" subtext="Last 90 days" color="var(--blue)" icon={Target} />
-        </div>
-
-        {/* Timeline */}
-        <div style={{ marginBottom: 20 }}>
-          <RiskTimeline
-            history={criticalProject.signalHistory}
-            title={`Behavioral signal timeline — ${criticalProject.name}`}
-            onDotClick={(payload) => {
-              const sig = signals.find(s => s.projectId === criticalProject.id);
-              if (sig) setSelectedSignal(sig);
-            }}
-          />
-        </div>
-
-        {/* Pattern grid */}
-        <div style={{ marginBottom: 20 }}>
-          <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Pattern Library — 9 Monitored Behaviors</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-            {PATTERN_TYPES.map(pt => {
-              const Icon = ICON_MAP[pt.icon] || AlertTriangle;
-              const count = activeSignals.filter(s => s.patternType === pt.type).length;
-              const severityColor = pt.severity === 'critical' ? 'var(--red)' : pt.severity === 'warning' ? 'var(--amber)' : 'var(--ink-4)';
-              return (
-                <div key={pt.type} style={{ background: 'var(--surface-2)', border: `1px solid ${count > 0 ? (pt.severity === 'critical' ? 'var(--red-border)' : 'var(--amber-border)') : 'var(--border)'}`, borderRadius: 10, padding: 14 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 7, background: pt.severity === 'critical' ? 'var(--red-bg)' : pt.severity === 'warning' ? 'var(--amber-bg)' : 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon size={14} color={severityColor} aria-hidden="true" />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-                      <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: pt.severity === 'critical' ? 'var(--red-bg)' : pt.severity === 'warning' ? 'var(--amber-bg)' : 'var(--surface)', color: severityColor, border: `1px solid ${pt.severity === 'critical' ? 'var(--red-border)' : pt.severity === 'warning' ? 'var(--amber-border)' : 'var(--border)'}`, fontWeight: 600 }}>{pt.severity} predictor</span>
-                      {count > 0 && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'var(--red-bg)', color: 'var(--red)', border: '1px solid var(--red-border)', fontWeight: 700 }}>{count} active</span>}
-                    </div>
-                  </div>
-                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{pt.name}</p>
-                  <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2, lineHeight: 1.4 }}>{pt.description}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Active signals list */}
-        <div>
-          <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Active Signals</h2>
-          {activeSignals.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12 }}>
-              <CheckCircle2 size={32} color="var(--green)" style={{ margin: '0 auto 12px' }} aria-hidden="true" />
-              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--green)' }}>All clear</p>
-              <p style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 4 }}>No active signals. Operations look healthy.</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {activeSignals.map(sig => (
-                <SignalCard key={sig.id} signal={sig} onSelect={setSelectedSignal} />
-              ))}
-            </div>
-          )}
-        </div>
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatCard
+          label="Risk score (avg)"
+          value={stats.avgRisk}
+          valueClass={stats.avgRisk >= 70 ? 'text-red' : stats.avgRisk >= 50 ? 'text-amber' : 'text-green'}
+          sub="▲ 6 vs last week"
+          subClass="text-red"
+        />
+        <StatCard
+          label="Active signals"
+          value={counts.total}
+          valueClass="text-amber"
+          sub={`${counts.critical} critical · ${counts.warning} warning · ${counts.watch} watch`}
+        />
+        <StatCard
+          label="Incidents prevented"
+          value={stats.prevented}
+          valueClass="text-green"
+          sub={`~$${stats.avoided.toLocaleString()} estimated cost avoidance`}
+          subClass="text-green"
+        />
+        <StatCard label="Prediction accuracy" value={`${stats.accuracy}%`} sub="Verified over last 90 days" />
       </div>
 
-      {/* Right panel */}
-      <DetailPanel
-        signal={selectedSignal}
-        project={selectedSignal ? projects.find(p => p.id === selectedSignal.projectId) : null}
-      />
+      <section className="rounded-card border border-bdr bg-surface-2 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-bold text-ink">
+            Behavioral signal timeline — <button onClick={() => navigate(`/projects/${criticalProject?.id}`)} className="text-red hover:underline">{criticalProject?.name}</button>
+          </h2>
+          <span className="font-mono text-[10px] text-ink-4">Click an event dot to inspect the signal</span>
+        </div>
+        <RiskTimeline project={criticalProject} onSelectEvent={handleTimelineEvent} />
+      </section>
 
-      {/* Alert stack */}
-      <AlertStack
-        signals={activeSignals}
-        onSelect={setSelectedSignal}
-        dismissedIds={allDismissed}
-        onDismiss={handleDismissAlert}
-      />
+      <section>
+        <h2 className="mb-3 text-sm font-bold text-ink">Pattern categories <span className="font-normal text-ink-4">— 9 behavioral predictors under continuous watch</span></h2>
+        <PatternGrid />
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-bold text-ink">What early intervention changes</h2>
+        <BeforeAfter project={criticalProject} />
+      </section>
+
+      <AlertStack onAct={handleSelect} />
     </div>
   );
 }

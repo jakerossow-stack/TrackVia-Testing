@@ -1,77 +1,94 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChevronDown, Loader2, ScanSearch } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
-import { ChevronDown, Settings, LogOut, User } from 'lucide-react';
 
-export function Topbar({ onRunScan, isScanning }) {
-  const [dropOpen, setDropOpen] = useState(false);
-  const currentUser = useAppStore(s => s.currentUser);
-  const organization = useAppStore(s => s.organization);
-  const logout = useAppStore(s => s.logout);
+// ---------------------------------------------------------------------------
+// Topbar
+// ---------------------------------------------------------------------------
+export function Topbar() {
   const navigate = useNavigate();
+  const { currentUser, organization, logout, runAnalysis, isAnalyzing } = useAppStore();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
-  function handleLogout() {
-    logout();
-    navigate('/login');
-  }
+  useEffect(() => {
+    const close = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
 
   return (
-    <div style={{
-      height: 48, background: 'var(--ink)', display: 'flex', alignItems: 'center',
-      padding: '0 20px', position: 'sticky', top: 0, zIndex: 100, gap: 16,
-    }}>
-      {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div className="pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--red)' }} />
-        <span style={{ color: '#fff', fontWeight: 700, fontSize: 15, fontFamily: 'DM Sans' }}>TrackVia Signal</span>
-      </div>
-
-      <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.15)' }} />
-      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Predictive Operations AI</span>
-
-      <div style={{ flex: 1 }} />
-
-      {/* Live badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(217,48,37,0.15)', border: '1px solid rgba(217,48,37,0.3)', borderRadius: 20, padding: '3px 10px' }}>
-        <div className="pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--red)' }} />
-        <span style={{ fontSize: 10, color: '#ff6b6b', fontWeight: 600 }}>MONITORING LIVE</span>
-      </div>
-
-      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{organization?.name}</span>
-
-      {/* User avatar */}
-      <div style={{ position: 'relative' }}>
-        <button
-          onClick={() => setDropOpen(!dropOpen)}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '4px 8px', cursor: 'pointer', color: '#fff' }}
-        >
-          <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
-            {currentUser?.avatarInitials}
-          </div>
-          <span style={{ fontSize: 12 }}>{currentUser?.name}</span>
-          <ChevronDown size={12} aria-hidden="true" />
+    <header className="sticky top-0 z-40 flex h-12 items-center justify-between bg-ink px-4 text-white">
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 animate-pulseDot rounded-full bg-red" aria-hidden="true" />
+          <span className="text-sm font-bold tracking-tight">TrackVia Signal</span>
         </button>
-        {dropOpen && (
-          <div style={{
-            position: 'absolute', right: 0, top: 40, background: 'var(--surface-2)', border: '1px solid var(--border)',
-            borderRadius: 10, padding: 6, minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 200,
-          }}>
-            <button onClick={() => { setDropOpen(false); navigate('/settings'); }} style={menuItemStyle}>
-              <Settings size={13} aria-hidden="true" /> Settings
-            </button>
-            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
-            <button onClick={handleLogout} style={{ ...menuItemStyle, color: 'var(--red)' }}>
-              <LogOut size={13} aria-hidden="true" /> Sign out
-            </button>
-          </div>
-        )}
+        <span className="hidden h-4 w-px bg-white/20 sm:block" aria-hidden="true" />
+        <span className="hidden text-[11px] font-medium uppercase tracking-widest text-ink-4 sm:block">
+          Predictive Operations AI
+        </span>
       </div>
-    </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={runAnalysis}
+          disabled={isAnalyzing}
+          className="hidden items-center gap-1.5 rounded-btn border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-white/10 disabled:opacity-60 md:inline-flex"
+        >
+          {isAnalyzing ? (
+            <>
+              <Loader2 size={12} className="animate-spin" aria-hidden="true" /> Scanning...
+            </>
+          ) : (
+            <>
+              <ScanSearch size={12} aria-hidden="true" /> Run scan now
+            </>
+          )}
+        </button>
+        <span className="hidden items-center gap-1.5 rounded-[20px] border border-red-bdr/30 bg-red/15 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-red sm:inline-flex">
+          <span className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-red" aria-hidden="true" />
+          MONITORING LIVE
+        </span>
+        <span className="hidden text-xs text-white/70 lg:block">{organization?.name}</span>
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="flex items-center gap-1.5 rounded-btn px-1 py-1 hover:bg-white/10"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-avatar bg-red text-[11px] font-bold text-white" aria-hidden="true">
+              {currentUser?.avatarInitials}
+            </span>
+            <ChevronDown size={12} className="text-white/60" aria-hidden="true" />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-10 w-48 rounded-card border border-bdr bg-surface-2 py-1.5 shadow-modal" role="menu">
+              <div className="border-b border-bdr px-3 pb-2 pt-1">
+                <div className="text-xs font-semibold text-ink">{currentUser?.name}</div>
+                <div className="text-[10px] capitalize text-ink-4">{currentUser?.role}</div>
+              </div>
+              <button role="menuitem" onClick={() => { setMenuOpen(false); navigate('/workforce'); }} className="block w-full px-3 py-2 text-left text-xs text-ink-2 hover:bg-surface">
+                Profile
+              </button>
+              <button role="menuitem" onClick={() => { setMenuOpen(false); navigate('/settings'); }} className="block w-full px-3 py-2 text-left text-xs text-ink-2 hover:bg-surface">
+                Settings
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); logout(); navigate('/login'); }}
+                className="block w-full px-3 py-2 text-left text-xs font-medium text-red hover:bg-red-bg"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </header>
   );
 }
-
-const menuItemStyle = {
-  display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none',
-  border: 'none', padding: '7px 10px', borderRadius: 7, cursor: 'pointer',
-  fontSize: 13, color: 'var(--ink-2)', textAlign: 'left',
-};

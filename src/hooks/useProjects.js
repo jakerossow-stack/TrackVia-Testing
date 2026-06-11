@@ -1,16 +1,14 @@
 import { useAppStore } from '../store/appStore';
-import { useMemo } from 'react';
 
 export function useProjects() {
-  const projects = useAppStore(state => state.projects);
-  const signals = useAppStore(state => state.signals);
+  return useAppStore((s) => s.projects);
+}
 
-  const projectsWithSignals = useMemo(() => {
-    return projects.map(p => ({
-      ...p,
-      signals: signals.filter(s => s.projectId === p.id && s.status === 'active'),
-    }));
-  }, [projects, signals]);
+export function useProject(id) {
+  return useAppStore((s) => s.projects.find((p) => p.id === id));
+}
 
-  return { projects: projectsWithSignals };
+export function useMostCriticalProject() {
+  const projects = useAppStore((s) => s.projects);
+  return [...projects].sort((a, b) => b.riskScore - a.riskScore)[0];
 }

@@ -1,21 +1,22 @@
-import { useAppStore } from '../store/appStore';
-import { useMemo } from 'react';
+import { useAppStore, severityRank } from '../store/appStore';
 
-export function useSignals(filters = {}) {
-  const signals = useAppStore(state => state.signals);
+export function useActiveSignals() {
+  const signals = useAppStore((s) => s.signals);
+  return signals
+    .filter((s) => s.status === 'active')
+    .sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
+}
 
-  const filtered = useMemo(() => {
-    return signals.filter(s => {
-      if (filters.severity && s.severity !== filters.severity) return false;
-      if (filters.status && s.status !== filters.status) return false;
-      if (filters.projectId && s.projectId !== filters.projectId) return false;
-      if (filters.patternType && s.patternType !== filters.patternType) return false;
-      return true;
-    });
-  }, [signals, filters]);
+export function useSignal(id) {
+  return useAppStore((s) => s.signals.find((sig) => sig.id === id));
+}
 
-  const activeCount = useMemo(() => signals.filter(s => s.status === 'active').length, [signals]);
-  const criticalCount = useMemo(() => signals.filter(s => s.severity === 'critical' && s.status === 'active').length, [signals]);
-
-  return { signals: filtered, allSignals: signals, activeCount, criticalCount };
+export function useSignalCounts() {
+  const active = useActiveSignals();
+  return {
+    total: active.length,
+    critical: active.filter((s) => s.severity === 'critical').length,
+    warning: active.filter((s) => s.severity === 'warning').length,
+    watch: active.filter((s) => s.severity === 'watch').length,
+  };
 }

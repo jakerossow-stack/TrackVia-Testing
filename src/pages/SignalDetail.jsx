@@ -1,192 +1,361 @@
-import { useParams, useNavigate } from 'react-router-dom';
-import { useAppStore } from '../store/appStore';
-import { SeverityBadge } from '../components/shared/SeverityBadge';
-import { ConfidenceBar } from '../components/shared/ConfidenceBar';
-import { AiAnalysisCard } from '../components/shared/AiAnalysisCard';
-import { RiskGauge } from '../components/shared/RiskGauge';
-import { EmployeeChip } from '../components/shared/EmployeeChip';
-import { RiskTimeline } from '../components/charts/RiskTimeline';
-import { useAiAnalysis } from '../hooks/useAiAnalysis';
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle, User, Lock } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import {
+  ArrowLeft, AlertTriangle, CheckCircle2, XCircle, ArrowUpRight, Lock,
+  FileText, Send, Search,
+} from 'lucide-react';
+import { useAppStore } from '../store/appStore';
+import { PATTERN_META } from '../store/seedData';
+import RiskGauge from '../components/shared/RiskGauge';
+import RiskTimeline from '../components/charts/RiskTimeline';
+import { AiAnalysisCard, SignalCard } from '../components/shared/SignalCard';
+import {
+  SeverityBadge, StatusChip, ConfidenceBar, EmployeeChip, EmptyState, Modal,
+  fmtDateTime, timeAgo, SEVERITY_STYLES,
+} from '../components/shared/ui';
 
-export function SignalDetail() {
+const PRIORITY_STYLES = {
+  high: 'bg-red-bg text-red border-red-border',
+  medium: 'bg-amber-bg text-amber border-amber-border',
+  low: 'bg-surface text-ink-3 border-bdr',
+};
+
+export default function SignalDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const signals = useAppStore(s => s.signals);
-  const projects = useAppStore(s => s.projects);
-  const employees = useAppStore(s => s.employees);
-  const updateAction = useAppStore(s => s.updateAction);
-  const addSignalNote = useAppStore(s => s.addSignalNote);
-  const dismissSignal = useAppStore(s => s.dismissSignal);
-  const { text, isStreaming, error, analyzeSignal } = useAiAnalysis();
+  const signal = useAppStore((s) => s.signals.find((x) => x.id === id));
+  const project = useAppStore((s) => s.projects.find((p) => p.id === signal?.projectId));
+  const signals = useAppStore((s) => s.signals);
+  const employees = useAppStore((s) => s.employees);
+  const currentUser = useAppStore((s) => s.currentUser);
+  const { dismissSignal, resolveSignal, escalateSignal, addSignalNote, completeAction, assignAction, selectSignal } =
+    useAppStore();
+
   const [noteText, setNoteText] = useState('');
-  const [localScore, setLocalScore] = useState(null);
+  const [resolveOpen, setResolveOpen] = useState(false);
+  const [resolution, setResolution] = useState('');
 
-  const signal = signals.find(s => s.id === id);
-  const project = projects.find(p => p.id === signal?.projectId);
-
-  if (!signal) return (
-    <div style={{ padding: 32, textAlign: 'center' }}>
-      <p style={{ color: 'var(--ink-3)' }}>Signal not found.</p>
-      <button onClick={() => navigate('/signals')} style={{ marginTop: 12, color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer' }}>← Back to signals</button>
-    </div>
-  );
-
-  const riskScore = localScore ?? project?.riskScore ?? 0;
-  const involvedEmps = employees.filter(e => signal.involvedEmployees?.includes(e.id));
-
-  function handleCompleteAction(action) {
-    if (action.status === 'completed') return;
-    updateAction(signal.id, action.id, { status: 'completed', completedAt: new Date().toISOString() });
-    const dec = 8 + Math.floor(Math.random() * 5);
-    const newScore = Math.max(0, riskScore - dec);
-    setLocalScore(newScore);
-    toast.success(`Action completed — risk score updated to ${newScore}`);
+  if (!signal) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          icon={Search}
+          iconClass="text-ink-4"
+          title="Signal not found"
+          message="This signal may have been removed, or the link is out of date."
+          action={
+            <Link to="/signals" className="inline-flex items-center gap-2 rounded-btn bg-ink px-4 py-2 text-sm font-medium text-white hover:bg-ink-2">
+              <ArrowLeft size={15} aria-hidden="true" /> Back to Signal Feed
+            </Link>
+          }
+        />
+      </div>
+    );
   }
 
-  function handleAddNote(e) {
+  const meta = PATTERN_META[signal.patternType];
+  const related = signals.filter((s) => s.projectId === signal.projectId && s.id !== signal.id && s.status === 'active');
+  const sev = SEVERITY_STYLES[signal.severity];
+
+  const submitNote = (e) => {
     e.preventDefault();
     if (!noteText.trim()) return;
-    addSignalNote(signal.id, noteText);
+    addSignalNote(signal.id, noteText.trim());
     setNoteText('');
-    toast.success('Note added');
-  }
+  };
 
   return (
-    <div style={{ padding: 24 }}>
-      <button onClick={() => navigate('/signals')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 13, marginBottom: 16 }}>
-        <ArrowLeft size={14} aria-hidden="true" /> Back to Signal Feed
+    <div className="mx-auto max-w-[1200px] p-6 pb-24">
+      <button
+        onClick={() => navigate(-1)}
+        className="mb-4 inline-flex items-center gap-1.5 rounded-btn px-2 py-1 text-sm text-ink-3 hover:bg-surface-2 hover:text-ink"
+      >
+        <ArrowLeft size={15} aria-hidden="true" /> Back
       </button>
 
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-        {/* Left column */}
-        <div style={{ flex: 3, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[3fr_2fr]">
+        {/* ---------------- Left column (60%) ---------------- */}
+        <div className="min-w-0 space-y-6">
           {/* Header */}
-          <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <SeverityBadge severity={signal.severity} size="lg" />
-              <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>{project?.name}</span>
-              <span style={{ fontSize: 11, color: 'var(--ink-4)', marginLeft: 'auto', fontFamily: 'DM Mono' }}>
-                Detected {new Date(signal.detectedAt).toLocaleString()}
+          <div className="rounded-card border border-bdr bg-surface-2 p-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <SeverityBadge severity={signal.severity} />
+              <StatusChip status={signal.status} />
+              <span className="rounded-badge border border-bdr bg-surface px-2 py-0.5 font-mono text-[11px] text-ink-3">
+                {meta?.name || signal.patternType}
               </span>
             </div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.4, marginBottom: 8 }}>{signal.title}</h1>
-            <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>{signal.description}</p>
+            <h1 className="mt-3 font-display text-[22px] font-bold leading-snug text-ink">{signal.title}</h1>
+            <p className="mt-1.5 text-sm leading-relaxed text-ink-3">{signal.description}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-4">
+              <Link to={`/projects/${signal.projectId}`} className="font-medium text-blue hover:underline">
+                {project?.name}
+              </Link>
+              <span className="font-mono">Detected {fmtDateTime(signal.detectedAt)} ({timeAgo(signal.detectedAt)})</span>
+              <span className={`font-mono font-medium ${sev.text}`}>Est. time to incident: {signal.estimatedTimeToIncident}</span>
+            </div>
           </div>
 
           {/* Evidence */}
-          <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Evidence Items</h2>
-            {signal.evidenceItems?.map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < signal.evidenceItems.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.severity === 'critical' ? 'var(--red)' : item.severity === 'warning' ? 'var(--amber)' : 'var(--ink-4)' }} />
-                  <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{item.label}</span>
-                </div>
-                <span style={{ fontSize: 12, fontFamily: 'DM Mono', fontWeight: 600, color: item.severity === 'critical' ? 'var(--red)' : item.severity === 'warning' ? 'var(--amber)' : 'var(--ink-3)' }}>{item.value}</span>
-              </div>
-            ))}
-          </div>
+          <section className="rounded-card border border-bdr bg-surface-2 p-5">
+            <h2 className="font-display text-sm font-bold text-ink">Evidence</h2>
+            <p className="mt-0.5 text-xs text-ink-4">Behavioral observations contributing to this signal</p>
+            <ul className="mt-3 divide-y divide-bdr">
+              {signal.evidenceItems.map((ev, i) => {
+                const s = SEVERITY_STYLES[ev.severity === 'normal' ? 'watch' : ev.severity];
+                return (
+                  <li key={i} className="flex items-start gap-3 py-2.5">
+                    <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-badge border ${s.bg} ${s.border} ${s.text}`}>
+                      <AlertTriangle size={12} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-ink-2">{ev.label}</div>
+                      <div className="font-mono text-xs text-ink-3">{ev.value}</div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
 
-          {/* AI Analysis */}
-          <AiAnalysisCard
-            text={text} isStreaming={isStreaming} error={error}
-            onAnalyze={() => analyzeSignal(signal, project?.signalHistory?.slice(-7))}
-          />
+          {/* AI analysis */}
+          <AiAnalysisCard signal={signal} />
 
           {/* Timeline */}
-          {project && <RiskTimeline history={project.signalHistory} title={`Risk timeline — ${project.name}`} />}
+          <section className="rounded-card border border-bdr bg-surface-2 p-5">
+            <h2 className="font-display text-sm font-bold text-ink">Signal buildup — {project?.name}</h2>
+            <div className="mt-3">
+              <RiskTimeline project={project} height={240} />
+            </div>
+          </section>
 
           {/* Notes */}
-          <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Notes</h2>
-            {(signal.notes || []).length === 0 && <p style={{ fontSize: 12, color: 'var(--ink-4)', marginBottom: 12 }}>No notes yet.</p>}
-            {(signal.notes || []).map(note => (
-              <div key={note.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                <p style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.5 }}>{note.text}</p>
-                <p style={{ fontSize: 10, color: 'var(--ink-4)', marginTop: 4, fontFamily: 'DM Mono' }}>{new Date(note.createdAt).toLocaleString()}</p>
+          <section className="rounded-card border border-bdr bg-surface-2 p-5">
+            <h2 className="font-display text-sm font-bold text-ink">Notes</h2>
+            {signal.notes.length === 0 ? (
+              <div className="mt-3 rounded-btn border border-dashed border-bdr-2 bg-surface px-4 py-5 text-center">
+                <FileText size={18} className="mx-auto text-ink-4" aria-hidden="true" />
+                <p className="mt-1.5 text-xs text-ink-4">No notes yet. Add context for your team below.</p>
               </div>
-            ))}
-            <form onSubmit={handleAddNote} style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-              <input value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Add a note..." style={{ flex: 1, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 7, fontSize: 13, background: 'var(--surface)' }} />
-              <button type="submit" style={{ padding: '8px 16px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, cursor: 'pointer' }}>Add</button>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {signal.notes.map((n) => {
+                  const author = n.authorId === currentUser?.id
+                    ? currentUser
+                    : employees.find((e) => e.id === n.authorId) || { name: 'Team member', initials: 'TM' };
+                  return (
+                    <li key={n.id} className="flex gap-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-avatar bg-ink text-[11px] font-bold text-white">
+                        {author.avatarInitials || author.initials}
+                      </span>
+                      <div className="min-w-0 rounded-btn border border-bdr bg-surface px-3 py-2">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs font-semibold text-ink-2">{author.name}</span>
+                          <span className="font-mono text-[10px] text-ink-4">{timeAgo(n.createdAt)}</span>
+                        </div>
+                        <p className="mt-0.5 text-sm leading-relaxed text-ink-2">{n.content}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <form onSubmit={submitNote} className="mt-4 flex gap-2">
+              <input
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Add a note for the team…"
+                className="h-10 flex-1 rounded-btn border border-bdr bg-surface-2 px-3 text-sm text-ink placeholder:text-ink-4 focus:border-bdr-2"
+              />
+              <button
+                type="submit"
+                disabled={!noteText.trim()}
+                className="inline-flex h-10 items-center gap-1.5 rounded-btn bg-ink px-4 text-sm font-medium text-white hover:bg-ink-2 disabled:opacity-40"
+              >
+                <Send size={14} aria-hidden="true" /> Add
+              </button>
             </form>
-          </div>
+          </section>
         </div>
 
-        {/* Right column */}
-        <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 24, minWidth: 0 }}>
-          <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, textAlign: 'center' }}>
-            <p style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 8 }}>CURRENT RISK SCORE</p>
-            <RiskGauge score={riskScore} size={160} />
-          </div>
+        {/* ---------------- Right column (40%) ---------------- */}
+        <div className="min-w-0 space-y-6">
+          {/* Gauge */}
+          <section className="rounded-card border border-bdr bg-surface-2 p-5">
+            <h2 className="font-display text-sm font-bold text-ink">Current project risk</h2>
+            <div className="mt-2 flex justify-center">
+              <RiskGauge score={project?.riskScore ?? 0} size={210} />
+            </div>
+            <p className="mt-1 text-center font-mono text-[11px] text-ink-4">
+              Trend: {project?.riskTrend} · updates live as actions complete
+            </p>
+          </section>
 
           {/* Actions */}
-          <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Recommended Actions</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {signal.recommendedActions?.map(action => {
-                const done = action.status === 'completed';
-                const assignee = employees.find(e => e.id === action.assignedTo);
-                return (
-                  <div key={action.id} style={{ padding: 12, borderRadius: 8, border: `1px solid ${done ? 'var(--green-border)' : 'var(--border)'}`, background: done ? 'var(--green-bg)' : 'var(--surface)', opacity: done ? 0.8 : 1 }}>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => handleCompleteAction(action)} style={{ background: 'none', border: 'none', cursor: done ? 'default' : 'pointer', padding: 0, marginTop: 1 }}>
-                        <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${done ? 'var(--green)' : 'var(--border-2)'}`, background: done ? 'var(--green)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {done && <span style={{ color: '#fff', fontSize: 9 }}>✓</span>}
-                        </div>
+          <section className="rounded-card border border-bdr bg-surface-2 p-5">
+            <h2 className="font-display text-sm font-bold text-ink">Recommended actions</h2>
+            {signal.recommendedActions.length === 0 ? (
+              <p className="mt-3 text-xs text-ink-4">No open actions for this signal.</p>
+            ) : (
+              <ol className="mt-3 space-y-3">
+                {signal.recommendedActions.map((a, i) => (
+                  <li key={a.id} className={`rounded-btn border p-3 ${a.status === 'completed' ? 'border-green-border bg-green-bg/50' : 'border-bdr bg-surface'}`}>
+                    <div className="flex items-start gap-2.5">
+                      <button
+                        onClick={() => a.status !== 'completed' && completeAction(a.id)}
+                        disabled={a.status === 'completed'}
+                        aria-label={a.status === 'completed' ? 'Action completed' : `Complete action ${i + 1}`}
+                        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                          a.status === 'completed'
+                            ? 'border-green bg-green text-white'
+                            : 'border-bdr-2 bg-surface-2 text-transparent hover:border-green hover:text-green/40'
+                        }`}
+                      >
+                        <CheckCircle2 size={13} aria-hidden="true" />
                       </button>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: 12, color: done ? 'var(--ink-3)' : 'var(--ink-2)', textDecoration: done ? 'line-through' : 'none', lineHeight: 1.4 }}>{action.description}</p>
-                        <div style={{ display: 'flex', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
-                          {assignee && <span style={{ fontSize: 10, color: 'var(--ink-4)' }}>👤 {assignee.name}</span>}
-                          <span style={{ fontSize: 10, color: 'var(--ink-4)', fontFamily: 'DM Mono' }}>Due {action.dueDate}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[10px] text-ink-4">#{i + 1}</span>
+                          <span className={`rounded-badge border px-1.5 py-px text-[10px] font-semibold uppercase ${PRIORITY_STYLES[a.priority]}`}>
+                            {a.priority}
+                          </span>
+                          <span className="font-mono text-[10px] text-ink-4">due {a.dueDate}</span>
+                        </div>
+                        <p className={`mt-1 text-sm leading-snug ${a.status === 'completed' ? 'text-ink-4 line-through' : 'text-ink-2'}`}>
+                          {a.description}
+                        </p>
+                        <div className="mt-2">
+                          <label className="sr-only" htmlFor={`assign-${a.id}`}>Assign to</label>
+                          <select
+                            id={`assign-${a.id}`}
+                            value={a.assignedTo || ''}
+                            onChange={(e) => assignAction(a.id, e.target.value || null)}
+                            disabled={a.status === 'completed'}
+                            className="h-7 w-full rounded-btn border border-bdr bg-surface-2 px-2 text-xs text-ink-2 disabled:opacity-50"
+                          >
+                            <option value="">Unassigned</option>
+                            {employees.filter((e) => e.active).map((e) => (
+                              <option key={e.id} value={e.id}>{e.name} — {e.role}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
 
-          {/* Metadata */}
-          <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Signal Metadata</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                <span style={{ color: 'var(--ink-4)' }}>Confidence</span>
-                <span style={{ fontFamily: 'DM Mono', color: 'var(--ink-2)', fontWeight: 600 }}>{signal.confidencePercent}%</span>
-              </div>
-              <ConfidenceBar percent={signal.confidencePercent} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 4 }}>
-                <span style={{ color: 'var(--ink-4)' }}>Pattern Type</span>
-                <span style={{ color: 'var(--ink-2)', fontWeight: 500 }}>{signal.patternType.replace(/_/g, ' ')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                <span style={{ color: 'var(--ink-4)' }}>Time to Incident</span>
-                <span style={{ color: 'var(--ink-2)', fontFamily: 'DM Mono', fontWeight: 600 }}>{signal.estimatedTimeToIncident}</span>
-              </div>
-            </div>
-            {involvedEmps.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                <p style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 6 }}>INVOLVED PERSONNEL <Lock size={10} style={{ display: 'inline', verticalAlign: 'middle' }} aria-hidden="true" /></p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {involvedEmps.map(e => <EmployeeChip key={e.id} employee={e} />)}
-                </div>
+          {/* Related signals */}
+          <section className="rounded-card border border-bdr bg-surface-2 p-5">
+            <h2 className="font-display text-sm font-bold text-ink">Related signals on this project</h2>
+            {related.length === 0 ? (
+              <p className="mt-3 text-xs text-ink-4">No other active signals on {project?.name}.</p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {related.map((s) => (
+                  <Link
+                    key={s.id}
+                    to={`/signals/${s.id}`}
+                    onClick={() => selectSignal(s.id)}
+                    className="flex items-center justify-between gap-2 rounded-btn border border-bdr bg-surface px-3 py-2 hover:border-bdr-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-ink-2">{s.title}</div>
+                      <div className="font-mono text-[10px] text-ink-4">{timeAgo(s.detectedAt)}</div>
+                    </div>
+                    <SeverityBadge severity={s.severity} />
+                  </Link>
+                ))}
               </div>
             )}
-          </div>
+          </section>
 
-          {/* Actions bar */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => { dismissSignal(signal.id); navigate('/signals'); toast.success('Signal dismissed'); }} style={{ flex: 1, padding: 10, borderRadius: 7, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 12, cursor: 'pointer', color: 'var(--ink-3)' }}>Dismiss</button>
-            <button style={{ flex: 1, padding: 10, borderRadius: 7, border: '1px solid var(--green-border)', background: 'var(--green-bg)', fontSize: 12, cursor: 'pointer', color: 'var(--green)', fontWeight: 600 }}>Resolve</button>
-          </div>
+          {/* Metadata */}
+          <section className="rounded-card border border-bdr bg-surface-2 p-5">
+            <h2 className="flex items-center gap-1.5 font-display text-sm font-bold text-ink">
+              Signal metadata <Lock size={12} className="text-ink-4" aria-hidden="true" />
+            </h2>
+            <dl className="mt-3 space-y-3 text-sm">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-ink-4">Confidence</dt>
+                <dd className="mt-1"><ConfidenceBar percent={signal.confidencePercent} /></dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-ink-4">Pattern type</dt>
+                <dd className="mt-1 text-ink-2">{meta?.name} <span className="text-ink-4">· {meta?.tier}</span></dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-ink-4">Involved employees</dt>
+                <dd className="mt-1.5 flex flex-wrap gap-1.5">
+                  {signal.involvedEmployees.length === 0 ? (
+                    <span className="text-xs text-ink-4">None identified</span>
+                  ) : (
+                    signal.involvedEmployees.map((id) => <EmployeeChip key={id} employeeId={id} />)
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </section>
         </div>
       </div>
+
+      {/* Sticky action bar */}
+      {signal.status === 'active' || signal.status === 'escalated' ? (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-bdr bg-surface-2/95 backdrop-blur">
+          <div className="mx-auto flex max-w-[1200px] flex-wrap items-center justify-end gap-2 px-6 py-3">
+            <span className="mr-auto hidden text-xs text-ink-4 sm:block">
+              Signal {signal.id} · {meta?.name} · {signal.confidencePercent}% confidence
+            </span>
+            <button
+              onClick={() => { dismissSignal(signal.id); navigate('/signals'); }}
+              className="inline-flex h-9 items-center gap-1.5 rounded-btn border border-bdr bg-surface-2 px-3.5 text-sm font-medium text-ink-3 hover:border-bdr-2 hover:text-ink"
+            >
+              <XCircle size={15} aria-hidden="true" /> Dismiss signal
+            </button>
+            {signal.status !== 'escalated' && (
+              <button
+                onClick={() => escalateSignal(signal.id)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-btn border border-amber-border bg-amber-bg px-3.5 text-sm font-medium text-amber hover:brightness-95"
+              >
+                <ArrowUpRight size={15} aria-hidden="true" /> Escalate
+              </button>
+            )}
+            <button
+              onClick={() => setResolveOpen(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-btn bg-green px-3.5 text-sm font-medium text-white hover:brightness-110"
+            >
+              <CheckCircle2 size={15} aria-hidden="true" /> Resolve
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <Modal open={resolveOpen} onClose={() => setResolveOpen(false)} title="Resolve signal">
+        <p className="text-sm text-ink-3">
+          Describe how this risk was addressed. The resolution is stored with the signal for the compliance trail.
+        </p>
+        <textarea
+          value={resolution}
+          onChange={(e) => setResolution(e.target.value)}
+          rows={4}
+          placeholder="e.g. Inspections rescheduled and completed; work order ownership reassigned to Keisha W."
+          className="mt-3 w-full rounded-btn border border-bdr bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-4 focus:border-bdr-2"
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={() => setResolveOpen(false)} className="h-9 rounded-btn border border-bdr px-3.5 text-sm font-medium text-ink-3 hover:text-ink">
+            Cancel
+          </button>
+          <button
+            disabled={!resolution.trim()}
+            onClick={() => { resolveSignal(signal.id, resolution.trim()); setResolveOpen(false); navigate('/signals'); }}
+            className="h-9 rounded-btn bg-green px-3.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-40"
+          >
+            Resolve with note
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

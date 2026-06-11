@@ -1,112 +1,204 @@
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, ZAxis } from 'recharts';
+import { ShieldCheck, Download, FileText, Lock } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAppStore } from '../store/appStore';
-import { Shield, Download, CheckCircle, AlertCircle, Clock } from 'lucide-react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
+import { SEED_COMPLIANCE_EVENTS } from '../store/seedData';
+import { StatusChip, fmtDate } from '../components/shared/ui';
 
-const EVENTS = [
-  { id: 'ce_1', date: '2024-01-10', type: 'DFARS Audit', description: 'Annual DFARS 252.204-7012 compliance audit', status: 'compliant' },
-  { id: 'ce_2', date: '2024-02-15', type: 'CMMC Assessment', description: 'CMMC Level 2 assessment for Site 7', status: 'finding' },
-  { id: 'ce_3', date: '2024-02-28', type: 'CMMC Correction', description: 'Access control policy updated per CMMC finding', status: 'corrected' },
-  { id: 'ce_4', date: '2024-03-20', type: 'OSHA Inspection', description: 'OSHA 1926 construction safety review at HQ', status: 'compliant' },
-  { id: 'ce_5', date: '2024-04-05', type: 'DFARS Review', description: 'Quarterly DFARS data handling review', status: 'compliant' },
-  { id: 'ce_6', date: '2024-05-01', type: 'Pending Certification', description: 'CMMC Level 2 re-certification in progress', status: 'pending' },
+const STATUS_DOT = { compliant: '#1A7A4A', finding: '#D93025', corrected: '#1155CC', pending: '#C47B00' };
+const FRAMEWORKS = [
+  { key: 'dfars', label: 'DFARS 252.204-7012' },
+  { key: 'cmmc', label: 'CMMC Level 2' },
+  { key: 'osha', label: 'OSHA' },
 ];
 
-const statusConfig = {
-  compliant: { color: 'var(--green)', bg: 'var(--green-bg)', border: 'var(--green-border)', icon: CheckCircle, label: 'Compliant' },
-  finding: { color: 'var(--red)', bg: 'var(--red-bg)', border: 'var(--red-border)', icon: AlertCircle, label: 'Finding' },
-  corrected: { color: 'var(--blue)', bg: 'var(--blue-bg)', border: 'var(--blue-border)', icon: CheckCircle, label: 'Corrected' },
-  pending: { color: 'var(--amber)', bg: 'var(--amber-bg)', border: 'var(--amber-border)', icon: Clock, label: 'Pending' },
-};
+export default function Compliance() {
+  const organization = useAppStore((s) => s.organization);
+  const events = SEED_COMPLIANCE_EVENTS;
 
-const monthlyData = [
-  { month: 'Jan', compliant: 2, finding: 0 },
-  { month: 'Feb', compliant: 1, finding: 1 },
-  { month: 'Mar', compliant: 2, finding: 0 },
-  { month: 'Apr', compliant: 1, finding: 0 },
-  { month: 'May', compliant: 0, finding: 0 },
-];
+  const score = useMemo(() => {
+    const weights = { compliant: 1, corrected: 0.9, pending: 0.6, finding: 0 };
+    const total = events.reduce((a, e) => a + (weights[e.status] ?? 0), 0);
+    return Math.round((total / events.length) * 100);
+  }, [events]);
+  const scoreClass = score >= 90 ? 'text-green' : score >= 75 ? 'text-amber' : 'text-red';
 
-export function Compliance() {
-  const organization = useAppStore(s => s.organization);
-  const compliantCount = EVENTS.filter(e => e.status === 'compliant').length;
-  const total = EVENTS.length;
-  const score = Math.round((compliantCount / total) * 100);
-  const scoreColor = score >= 80 ? 'var(--green)' : score >= 60 ? 'var(--amber)' : 'var(--red)';
+  const timelineData = useMemo(
+    () =>
+      events.map((e) => ({
+        ...e,
+        ts: new Date(e.date).getTime(),
+        y: e.framework === 'dfars' ? 3 : e.framework === 'cmmc' ? 2 : 1,
+      })),
+    [events]
+  );
+
+  const frameworkStatus = (key) => {
+    const fw = events.filter((e) => e.framework === key);
+    if (fw.some((e) => e.status === 'finding')) return 'finding';
+    if (fw.some((e) => e.status === 'pending')) return 'pending';
+    return 'compliant';
+  };
+
+  const exportReport = () => {
+    const compliant = events.filter((e) => e.status === 'compliant' || e.status === 'corrected');
+    const lines = [
+      'TRACKVIA SIGNAL — DFARS COMPLIANCE EXPORT',
+      `Organization: ${organization?.name}`,
+      `Generated: ${new Date().toISOString()}`,
+      `Compliance score: ${score}%`,
+      'All data processed within FedRAMP Moderate authorization boundary.',
+      '',
+      'COMPLIANT / CORRECTED ITEMS',
+      '---------------------------',
+      ...compliant.map((e) => `${fmtDate(e.date)} | ${e.framework.toUpperCase()} | ${e.type} | ${e.description} | ${e.status.toUpperCase()}`),
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dfars-report-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('DFARS report exported');
+  };
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* FedRAMP notice */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: 'var(--blue-bg)', border: '1px solid var(--blue-border)', borderRadius: 8 }}>
-        <Shield size={16} color="var(--blue)" aria-hidden="true" />
-        <p style={{ fontSize: 13, color: 'var(--blue)', fontWeight: 500 }}>All data processed within FedRAMP Moderate authorization boundary. No CUI leaves the secured environment.</p>
+    <div className="mx-auto max-w-[1100px] p-6">
+      {/* FedRAMP boundary notice */}
+      <div className="flex items-start gap-3 rounded-card border border-blue-border bg-blue-bg px-4 py-3">
+        <ShieldCheck size={18} className="mt-0.5 shrink-0 text-blue" aria-hidden="true" />
+        <div>
+          <p className="text-sm font-semibold text-ink">All data processed within FedRAMP Moderate authorization boundary</p>
+          <p className="mt-0.5 text-xs text-ink-3">
+            Compliance records, AI analysis, and linked signal data never leave the authorized environment. Audit trail retained per DFARS 252.204-7012.
+          </p>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-        {/* Score card */}
-        <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, minWidth: 200, textAlign: 'center' }}>
-          <p style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 8, textTransform: 'uppercase' }}>Compliance Score</p>
-          <p style={{ fontSize: 52, fontWeight: 700, fontFamily: 'DM Mono', color: scoreColor }}>{score}%</p>
-          <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
-            {[['DFARS', 'green'], ['CMMC', 'amber'], ['OSHA', 'green']].map(([label, state]) => (
-              <span key={label} style={{
-                fontSize: 11, padding: '3px 8px', borderRadius: 5, fontWeight: 600,
-                background: `var(--${state}-bg)`, border: `1px solid var(--${state}-border)`, color: `var(--${state})`,
-              }}>{label} {state === 'green' ? '✓' : '⚠'}</span>
+      <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-xl font-bold text-ink">Compliance Log</h1>
+          <p className="mt-0.5 text-sm text-ink-3">DFARS / CMMC / OSHA events for {organization?.name}</p>
+        </div>
+        <button
+          onClick={exportReport}
+          className="inline-flex h-9 items-center gap-1.5 rounded-btn bg-ink px-3.5 text-sm font-medium text-white hover:bg-ink-2"
+        >
+          <Download size={15} aria-hidden="true" /> Export DFARS report
+        </button>
+      </div>
+
+      {/* Score card */}
+      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_2fr]">
+        <div className="rounded-card border border-bdr bg-surface-2 p-5">
+          <div className="text-xs font-semibold uppercase tracking-wide text-ink-4">Compliance score</div>
+          <div className={`mt-1 font-mono text-5xl font-medium ${scoreClass}`}>{score}%</div>
+          <p className="mt-1.5 text-xs text-ink-4">Weighted across {events.length} events, trailing 12 months</p>
+        </div>
+        <div className="rounded-card border border-bdr bg-surface-2 p-5">
+          <div className="text-xs font-semibold uppercase tracking-wide text-ink-4">Framework status</div>
+          <div className="mt-3 space-y-2.5">
+            {FRAMEWORKS.map((f) => (
+              <div key={f.key} className="flex items-center justify-between border-b border-bdr pb-2.5 last:border-0 last:pb-0">
+                <span className="flex items-center gap-1.5 text-sm text-ink-2">
+                  <Lock size={12} className="text-ink-4" aria-hidden="true" /> {f.label}
+                </span>
+                <StatusChip status={frameworkStatus(f.key)} />
+              </div>
             ))}
           </div>
         </div>
+      </div>
 
-        {/* Timeline chart */}
-        <div style={{ flex: 1, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
-          <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Compliance Events — Last 12 Months</h2>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={monthlyData}>
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--ink-4)' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--ink-4)' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-              <Bar dataKey="compliant" name="Compliant" fill="var(--green)" opacity={0.7} radius={[3,3,0,0]} />
-              <Bar dataKey="finding" name="Finding" fill="var(--red)" opacity={0.7} radius={[3,3,0,0]} />
-            </BarChart>
+      {/* Timeline */}
+      <section className="mt-5 rounded-card border border-bdr bg-surface-2 p-5">
+        <h2 className="font-display text-sm font-bold text-ink">Compliance events — last 12 months</h2>
+        <div className="mt-3 h-[180px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 10, right: 16, left: -8, bottom: 0 }}>
+              <XAxis
+                dataKey="ts" type="number" domain={['dataMin - 1000000000', 'dataMax + 1000000000']}
+                tickFormatter={(ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short' })}
+                tick={{ fontSize: 10, fill: '#7A9AB0' }} axisLine={{ stroke: '#DCE4EC' }} tickLine={false}
+              />
+              <YAxis
+                dataKey="y" type="number" domain={[0.5, 3.5]} ticks={[1, 2, 3]}
+                tickFormatter={(v) => (v === 3 ? 'DFARS' : v === 2 ? 'CMMC' : 'OSHA')}
+                tick={{ fontSize: 10, fill: '#7A9AB0' }} axisLine={false} tickLine={false} width={48}
+              />
+              <ZAxis range={[90, 90]} />
+              <Tooltip
+                cursor={{ strokeDasharray: '3 3' }}
+                content={({ payload }) => {
+                  const d = payload?.[0]?.payload;
+                  if (!d) return null;
+                  return (
+                    <div className="rounded-btn border border-bdr bg-surface-2 px-3 py-2 text-xs shadow-modal">
+                      <div className="font-mono text-[10px] text-ink-4">{fmtDate(d.date)} · {d.type}</div>
+                      <div className="mt-0.5 max-w-[240px] font-medium text-ink-2">{d.description}</div>
+                    </div>
+                  );
+                }}
+              />
+              <Scatter data={timelineData} animationDuration={300} shape={(props) => (
+                <circle cx={props.cx} cy={props.cy} r={6} fill={STATUS_DOT[props.payload.status]} stroke="#FFFFFF" strokeWidth={1.5} />
+              )} />
+            </ScatterChart>
           </ResponsiveContainer>
         </div>
-      </div>
-
-      {/* Events table */}
-      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h2 style={{ fontSize: 14, fontWeight: 600 }}>Compliance Log</h2>
-          <button style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 12, cursor: 'pointer', color: 'var(--ink-2)' }}>
-            <Download size={13} aria-hidden="true" /> Export DFARS Report
-          </button>
+        <div className="mt-1 flex flex-wrap items-center gap-4 text-[11px] text-ink-4">
+          {Object.entries(STATUS_DOT).map(([k, c]) => (
+            <span key={k} className="inline-flex items-center gap-1.5 capitalize">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: c }} /> {k}
+            </span>
+          ))}
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              {['Date', 'Type', 'Description', 'Status'].map(h => (
-                <th key={h} style={{ textAlign: 'left', fontSize: 11, color: 'var(--ink-4)', fontWeight: 500, paddingBottom: 10, paddingRight: 16 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {EVENTS.map(ev => {
-              const cfg = statusConfig[ev.status];
-              const Icon = cfg.icon;
-              return (
-                <tr key={ev.id} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td style={{ padding: '10px 16px 10px 0', fontSize: 11, color: 'var(--ink-3)', fontFamily: 'DM Mono' }}>{ev.date}</td>
-                  <td style={{ padding: '10px 16px 10px 0', fontSize: 12, fontWeight: 500 }}>{ev.type}</td>
-                  <td style={{ padding: '10px 16px 10px 0', fontSize: 12, color: 'var(--ink-3)' }}>{ev.description}</td>
-                  <td style={{ padding: '10px 0' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 10, background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color, fontWeight: 600 }}>
-                      <Icon size={10} aria-hidden="true" /> {cfg.label}
-                    </span>
+      </section>
+
+      {/* Log table */}
+      <section className="mt-5 overflow-hidden rounded-card border border-bdr bg-surface-2">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead>
+              <tr className="border-b border-bdr bg-surface text-left">
+                {['Date', 'Type', 'Description', 'Status', 'Linked signal', 'Docs'].map((h) => (
+                  <th key={h} className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-ink-4">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[...events].sort((a, b) => new Date(b.date) - new Date(a.date)).map((e) => (
+                <tr key={e.id} className="border-b border-bdr last:border-0 hover:bg-surface">
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-ink-3">{fmtDate(e.date)}</td>
+                  <td className="px-4 py-3 text-ink-2">{e.type}</td>
+                  <td className="px-4 py-3 text-ink-2">{e.description}</td>
+                  <td className="px-4 py-3"><StatusChip status={e.status} /></td>
+                  <td className="px-4 py-3">
+                    {e.linkedSignalId?.startsWith('sig_') ? (
+                      <Link to={`/signals/${e.linkedSignalId}`} className="font-mono text-xs text-blue hover:underline">{e.linkedSignalId}</Link>
+                    ) : e.linkedSignalId ? (
+                      <span className="font-mono text-xs text-ink-4">{e.linkedSignalId}</span>
+                    ) : (
+                      <span className="text-xs text-ink-4">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => toast('Documentation viewer is connected to your TrackVia workspace in production.', { icon: '📄' })}
+                      className="inline-flex items-center gap-1 rounded-btn border border-bdr px-2 py-1 text-xs text-ink-3 hover:border-bdr-2 hover:text-ink"
+                    >
+                      <FileText size={12} aria-hidden="true" /> View
+                    </button>
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }
