@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TrackVia Pricing Estimator</title>
+<style>
+  :root {
+    --ink: #17203a;
+    --muted: #5c6478;
+    --faint: #8991a3;
+    --paper: #f5f6fa;
+    --surface: #ffffff;
+    --line: #e2e5ed;
+    --accent: #146c64;
+    --accent-ink: #0e4d47;
+    --accent-soft: #e4f2ef;
+    --accent-soft-line: #c7e4de;
+    --cta: #dd6b20;
+    --cta-dark: #c15a16;
+    --cta-soft: #fdeee1;
+    --warn: #b45309;
+    --warn-soft: #fdf1e3;
+    --radius-lg: 16px;
+    --radius-md: 10px;
+    --radius-sm: 7px;
+  }
+
+  * { box-sizing: border-box; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    min-height: 100%;
+    padding: clamp(20px, 4vw, 56px) clamp(16px, 5vw, 64px) 64px;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  /* ---------- Header ---------- */
+  header.page-head {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: clamp(28px, 4vw, 40px);
+  }
+
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: linear-gradient(155deg, var(--accent) 0%, #0d4a45 100%);
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+  .brand-mark svg { width: 16px; height: 16px; }
+
+  .brand-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+  }
+
+  h1 {
+    font-size: clamp(1.7rem, 3.2vw, 2.35rem);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    margin: 4px 0 0;
+    font-weight: 800;
+    text-wrap: balance;
+  }
+
+  .page-sub {
+    color: var(--muted);
+    font-size: 1.02rem;
+    max-width: 62ch;
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    grid-template-areas: "inputs estimate";
+    gap: clamp(16px, 2.5vw, 28px);
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .layout {
+      grid-template-columns: 1fr;
+      grid-template-areas: "estimate" "inputs";
+    }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 2px rgba(23, 32, 58, 0.03);
+  }
+
+  .inputs-card { grid-area: inputs; padding: clamp(20px, 3vw, 30px); }
+
+  .estimate-card {
+    grid-area: estimate;
+    padding: clamp(20px, 3vw, 28px);
+    position: sticky;
+    top: 20px;
+  }
+  @media (max-width: 900px) { .estimate-card { position: static; } }
+
+  .card-title {
+    font-size: 1.02rem;
+    font-weight: 700;
+    margin: 0 0 4px;
+    letter-spacing: -0.005em;
+  }
+  .card-hint {
+    font-size: 0.86rem;
+    color: var(--muted);
+    margin: 0 0 22px;
+    line-height: 1.5;
+  }
+
+  /* ---------- Field groups ---------- */
+  .field { margin-bottom: 26px; }
+  .field:last-child { margin-bottom: 0; }
+
+  .field-label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .field-label {
+    font-size: 0.83rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.055em;
+    color: var(--muted);
+  }
+
+  .field-value {
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    font-weight: 700;
+    font-size: 0.98rem;
+    color: var(--accent-ink);
+    white-space: nowrap;
+  }
+
+  .field-note {
+    font-size: 0.8rem;
+    color: var(--faint);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  /* ---------- Slider ---------- */
+  .slider-row { display: flex; align-items: center; gap: 12px; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--fill, 0%), var(--line) var(--fill, 0%), var(--line) 100%);
+    outline-offset: 4px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 3px solid var(--accent);
+    box-shadow: 0 1px 3px rgba(23,32,58,0.25);
+    cursor: pointer;
+    transition: transform 0.12s ease;
+  }
+  input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.08); }
+  input[type="range"]::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--line);
+  }
+  input[type="range"]::-moz-range-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 3px solid var(--accent);
+    cursor: pointer;
+  }
+  input[type="range"]:disabled { opacity: 0.4; }
+  input[type="range"]:disabled::-webkit-slider-thumb { cursor: not-allowed; }
+
+  .scale-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.74rem;
+    color: var(--faint);
+    margin-top: 7px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- 1000+ checkbox line ---------- */
+  .enterprise-toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 14px;
+    font-size: 0.87rem;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .enterprise-toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+  /* ---------- Number stepper ---------- */
+  .stepper {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--paper);
+  }
+  .stepper button {
+    width: 38px;
+    height: 40px;
+    border: none;
+    background: var(--surface);
+    color: var(--accent-ink);
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+  .stepper button:hover { background: var(--accent-soft); }
+  .stepper button:active { background: var(--accent-soft-line); }
+  .stepper input {
+    width: 64px;
+    height: 40px;
+    border: none;
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    text-align: center;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--ink);
+    background: var(--surface);
+    -moz-appearance: textfield;
+  }
+  .stepper input::-webkit-outer-spin-button,
+  .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .stepper input:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  /* ---------- Segmented control ---------- */
+  .segmented {
+    display: grid;
+    gap: 8px;
+  }
+  .segmented.cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+  .segmented input { position: absolute; opacity: 0; pointer-events: none; }
+
+  .segmented label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    cursor: pointer;
+    background: var(--surface);
+    transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+  }
+  .segmented label:hover { border-color: var(--accent-soft-line); }
+  .segmented input:checked + label {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .segmented input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .seg-title { font-weight: 700; font-size: 0.88rem; color: var(--ink); }
+  .seg-sub { font-size: 0.74rem; color: var(--muted); line-height: 1.35; }
+
+  /* ---------- Toggle switch (compliance) ---------- */
+  .toggle-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+  }
+  .toggle-copy { display: flex; flex-direction: column; gap: 3px; }
+  .toggle-copy .seg-title { font-size: 0.9rem; }
+  .toggle-copy .seg-sub { font-size: 0.78rem; }
+
+  .switch {
+    position: relative;
+    width: 42px;
+    height: 24px;
+    flex: none;
+    margin-top: 2px;
+  }
+  .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .switch .track {
+    position: absolute; inset: 0;
+    background: var(--line);
+    border-radius: 999px;
+    transition: background 0.15s ease;
+  }
+  .switch .knob {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgba(23,32,58,0.3);
+    transition: transform 0.15s ease;
+  }
+  .switch input:checked ~ .track { background: var(--warn); }
+  .switch input:checked ~ .knob { transform: translateX(18px); }
+  .switch input:focus-visible ~ .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- Estimate card ---------- */
+  .estimate-kicker {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+  }
+
+  .estimate-label {
+    font-size: 0.83rem;
+    color: var(--muted);
+    margin: 0 0 4px;
+  }
+
+  .estimate-figure {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    font-size: clamp(1.65rem, 3vw, 2.05rem);
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    line-height: 1.15;
+    margin: 0 0 2px;
+    text-wrap: balance;
+  }
+
+  .estimate-figure.contact { color: var(--cta-dark); font-size: clamp(1.3rem, 2.4vw, 1.6rem); }
+
+  .estimate-perseat {
+    font-size: 0.8rem;
+    color: var(--faint);
+    margin: 0 0 20px;
+  }
+
+  .divider { height: 1px; background: var(--line); margin: 18px 0; border: none; }
+
+  .breakdown { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+  .breakdown li {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 0.87rem;
+  }
+  .breakdown .bd-label { color: var(--muted); }
+  .breakdown .bd-label small { display: block; color: var(--faint); font-size: 0.74rem; margin-top: 1px; }
+  .breakdown .bd-value {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .breakdown li.total .bd-label { color: var(--ink); font-weight: 700; }
+  .breakdown li.total .bd-value { font-weight: 800; font-size: 0.95rem; }
+
+  .onetime-block {
+    margin-top: 18px;
+    padding: 14px 16px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+  }
+  .onetime-block .estimate-label { margin-bottom: 6px; }
+  .onetime-figure {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    font-size: 1.35rem;
+    color: var(--ink);
+    margin: 0 0 10px;
+  }
+
+  .disclaimer {
+    margin-top: 20px;
+    padding: 13px 15px;
+    background: var(--warn-soft);
+    border: 1px solid #f0d5ab;
+    border-radius: var(--radius-md);
+    font-size: 0.78rem;
+    line-height: 1.55;
+    color: #7c4a12;
+  }
+  .disclaimer strong { color: #5c3609; }
+
+  .cta-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 18px;
+    padding: 15px 18px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--cta);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    cursor: pointer;
+    transition: background 0.12s ease, transform 0.08s ease;
+  }
+  .cta-btn:hover { background: var(--cta-dark); }
+  .cta-btn:active { transform: translateY(1px); }
+  .cta-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .cta-sub {
+    text-align: center;
+    font-size: 0.76rem;
+    color: var(--faint);
+    margin: 9px 0 0;
+  }
+
+  .section-gap { margin-top: 34px; }
+  .section-gap:first-child { margin-top: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page-head">
+    <div class="brand-row">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 12l5 5L20 6" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="brand-name">TrackVia</span>
+    </div>
+    <h1>Pricing estimator</h1>
+    <p class="page-sub">Adjust the inputs below to see a rough annual cost range for your organization. Everything updates instantly — no forms, no email required.</p>
+  </header>
+
+  <div class="layout">
+    <!-- ============ INPUTS ============ -->
+    <section class="inputs-card card">
+      <h2 class="card-title">Configure your estimate</h2>
+      <p class="card-hint">Every figure here is a planning placeholder, not a quote. See the disclaimer for details.</p>
+
+      <!-- Users -->
+      <div class="field">
+        <div class="field-label-row">
+          <span class="field-label">Users</span>
+          <span class="field-value" id="usersValueLabel">25 users</span>
+        </div>
+        <div class="slider-row">
+          <input type="range" id="usersSlider" min="1" max="1000" value="25" step="1" aria-label="Number of users" />
+        </div>
+        <div class="scale-ticks"><span>1</span><span>250</span><span>500</span><span>750</span><span>1,000</span></div>
+        <label class="enterprise-toggle">
+          <input type="checkbox" id="enterpriseToggle" />
+          We need 1,000+ seats (enterprise scale)
+        </label>
+      </div>
+
+      <!-- Apps -->
+      <div class="field">
+        <div class="field-label-row">
+          <span class="field-label">Custom apps &amp; workflows</span>
+          <span class="field-value" id="appsValueLabel">3 apps</span>
+        </div>
+        <div class="stepper">
+          <button type="button" id="appsMinus" aria-label="Decrease number of apps">&minus;</button>
+          <input type="number" id="appsInput" value="3" min="0" max="200" inputmode="numeric" aria-label="Number of custom applications" />
+          <button type="button" id="appsPlus" aria-label="Increase number of apps">+</button>
+        </div>
+        <p class="field-note">Distinct low-code apps or automated workflows you need built (e.g. inventory tracker, approval flow, field-service dispatch).</p>
+      </div>
+
+      <!-- Complexity -->
+      <div class="field">
+        <div class="field-label-row">
+          <span class="field-label">Build &amp; implementation complexity</span>
+        </div>
+        <div class="segmented cols-3" id="complexityGroup">
+          <input type="radio" name="complexity" id="cx-basic" value="basic" />
+          <label for="cx-basic"><span class="seg-title">Basic</span><span class="seg-sub">Simple forms, few integrations</span></label>
+
+          <input type="radio" name="complexity" id="cx-moderate" value="moderate" checked />
+          <label for="cx-moderate"><span class="seg-title">Moderate</span><span class="seg-sub">Multiple apps, some integrations</span></label>
+
+          <input type="radio" name="complexity" id="cx-complex" value="complex" />
+          <label for="cx-complex"><span class="seg-title">Complex</span><span class="seg-sub">Legacy data, heavy integrations</span></label>
+        </div>
+        <p class="field-note">Drives both the one-time setup cost and the per-app build cost below.</p>
+      </div>
+
+      <!-- Support tier -->
+      <div class="field">
+        <div class="field-label-row">
+          <span class="field-label">Support tier</span>
+        </div>
+        <div class="segmented cols-3" id="supportGroup">
+          <input type="radio" name="support" id="sp-standard" value="standard" checked />
+          <label for="sp-standard"><span class="seg-title">Standard</span><span class="seg-sub">Included, no uplift</span></label>
+
+          <input type="radio" name="support" id="sp-premium" value="premium" />
+          <label for="sp-premium"><span class="seg-title">Premium</span><span class="seg-sub">Faster response times</span></label>
+
+          <input type="radio" name="support" id="sp-enterprise" value="enterprise" />
+          <label for="sp-enterprise"><span class="seg-title">Enterprise</span><span class="seg-sub">Dedicated CSM, SLAs</span></label>
+        </div>
+      </div>
+
+      <!-- Compliance -->
+      <div class="field">
+        <div class="field-label-row">
+          <span class="field-label">Compliance</span>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-copy">
+            <span class="seg-title">Government / defense compliance</span>
+            <span class="seg-sub">FedRAMP Moderate Equivalency-related add-on for public-sector or defense workloads.</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="complianceToggle" aria-label="Enable government and defense compliance add-on" />
+            <span class="track"></span>
+            <span class="knob"></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ESTIMATE ============ -->
+    <aside class="estimate-card card">
+      <span class="estimate-kicker" id="planTierBadge">Business platform</span>
+
+      <p class="estimate-label">Estimated annual subscription</p>
+      <p class="estimate-figure" id="annualFigure">$8,900 &ndash; $11,200</p>
+      <p class="estimate-perseat" id="monthlyContext">≈ $740–$930 / month</p>
+
+      <hr class="divider" />
+
+      <p class="estimate-label">Breakdown</p>
+      <ul class="breakdown" id="breakdownList"></ul>
+
+      <div class="onetime-block">
+        <p class="estimate-label">One-time implementation estimate</p>
+        <p class="onetime-figure" id="onetimeFigure">$6,500 &ndash; $13,000</p>
+        <ul class="breakdown" id="onetimeList"></ul>
+      </div>
+
+      <div class="disclaimer">
+        <strong>Rough, non-binding estimate.</strong> Figures are illustrative placeholders built from general market data on comparable low-code platforms — not TrackVia's actual price list. Real pricing depends on your specific requirements and is only final once confirmed by TrackVia sales.
+      </div>
+
+      <button type="button" class="cta-btn" id="ctaBtn">
+        Talk to sales — get an exact quote
+      </button>
+      <p class="cta-sub">No commitment. A TrackVia specialist will confirm real pricing for your use case.</p>
+    </aside>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+
+  // ---------------------------------------------------------------------
+  // PLACEHOLDER PRICING MODEL
+  // Every number in this section is illustrative, drawn from general
+  // third-party pricing trackers / public estimates for comparable
+  // low-code platforms. NONE of it is TrackVia's actual internal pricing.
+  // PLACEHOLDER — replace with actual TrackVia pricing before any real use.
+  // ---------------------------------------------------------------------
+
+  // PLACEHOLDER — replace with actual TrackVia pricing.
+  // Blended $/user/month, low & high, interpolated between these anchors.
+  // Modeled as starting near $15/user at very small scale and drifting
+  // toward $25-$40/user as org size (and typical feature usage) grows.
+  const PER_USER_RATE_CURVE = [
+    { users: 1, low: 15, high: 20 },
+    { users: 10, low: 16, high: 22 },
+    { users: 50, low: 18, high: 26 },
+    { users: 100, low: 20, high: 30 },
+    { users: 500, low: 23, high: 36 },
+    { users: 1000, low: 25, high: 40 },
+  ];
+
+  // PLACEHOLDER — replace with actual TrackVia pricing.
+  // Base platform tiers act as a monthly cost floor beneath the per-user math.
+  const BASE_TIERS = {
+    quickstart: { name: "QuickStart platform", floor: 999, maxUsers: 25 },
+    business: { name: "Business platform", floor: 2499, maxUsers: 250 },
+    enterprise: { name: "Enterprise platform (custom)", floor: null, maxUsers: Infinity },
+  };
+
+  const ENTERPRISE_USER_THRESHOLD = 1000; // PLACEHOLDER — above this, show "Contact Sales" instead of a number.
+
+  // PLACEHOLDER — replace with actual TrackVia pricing.
+  // One-time cost to design/build a single custom app or workflow, by complexity.
+  const APP_COST = {
+    basic: { low: 500, high: 1500 },
+    moderate: { low: 1500, high: 3000 },
+    complex: { low: 3000, high: 5000 },
+  };
+
+  // PLACEHOLDER — replace with actual TrackVia pricing.
+  // One-time implementation / onboarding setup cost, by complexity.
+  const IMPLEMENTATION_COST = {
+    basic: { low: 1000, high: 5000, plus: false },
+    moderate: { low: 5000, high: 10000, plus: false },
+    complex: { low: 20000, high: 50000, plus: true },
+  };
+
+  // PLACEHOLDER — replace with actual TrackVia pricing.
+  // Flat estimated % uplift on the monthly subscription for paid support tiers.
+  const SUPPORT_UPLIFT = {
+    standard: 0,
+    premium: 0.12,
+    enterprise: 0.2,
+  };
+
+  // PLACEHOLDER — replace with actual TrackVia pricing.
+  // Flat estimated monthly uplift for FedRAMP Moderate Equivalency-related
+  // compliance add-on. No public figure exists for this; purely illustrative.
+  const COMPLIANCE_UPLIFT = { low: 750, high: 2000 };
+
+  // ---------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function perUserRate(users) {
+    const pts = PER_USER_RATE_CURVE;
+    if (users <= pts[0].users) return { low: pts[0].low, high: pts[0].high };
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      if (users >= a.users && users <= b.users) {
+        const t = (users - a.users) / (b.users - a.users);
+        return { low: lerp(a.low, b.low, t), high: lerp(a.high, b.high, t) };
+      }
+    }
+    const last = pts[pts.length - 1];
+    return { low: last.low, high: last.high };
+  }
+
+  function baseTierFor(users) {
+    if (users <= BASE_TIERS.quickstart.maxUsers) return BASE_TIERS.quickstart;
+    if (users <= BASE_TIERS.business.maxUsers) return BASE_TIERS.business;
+    return BASE_TIERS.enterprise;
+  }
+
+  function money(n) {
+    return "$" + Math.round(n).toLocaleString("en-US");
+  }
+
+  function range(low, high, opts) {
+    opts = opts || {};
+    const suffix = opts.plus ? "+" : "";
+    if (Math.round(low) === Math.round(high)) return money(low) + suffix;
+    return money(low) + " – " + money(high) + suffix;
+  }
+
+  // ---------------------------------------------------------------------
+  // Elements
+  // ---------------------------------------------------------------------
+
+  const usersSlider = document.getElementById("usersSlider");
+  const usersValueLabel = document.getElementById("usersValueLabel");
+  const enterpriseToggle = document.getElementById("enterpriseToggle");
+
+  const appsInput = document.getElementById("appsInput");
+  const appsValueLabel = document.getElementById("appsValueLabel");
+  const appsMinus = document.getElementById("appsMinus");
+  const appsPlus = document.getElementById("appsPlus");
+
+  const complianceToggle = document.getElementById("complianceToggle");
+
+  const planTierBadge = document.getElementById("planTierBadge");
+  const annualFigure = document.getElementById("annualFigure");
+  const monthlyContext = document.getElementById("monthlyContext");
+  const breakdownList = document.getElementById("breakdownList");
+  const onetimeFigure = document.getElementById("onetimeFigure");
+  const onetimeList = document.getElementById("onetimeList");
+  const ctaBtn = document.getElementById("ctaBtn");
+
+  function getComplexity() {
+    return document.querySelector('input[name="complexity"]:checked').value;
+  }
+  function getSupport() {
+    return document.querySelector('input[name="support"]:checked').value;
+  }
+
+  function bdRow(label, sub, valueText, isTotal) {
+    const li = document.createElement("li");
+    if (isTotal) li.className = "total";
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "bd-label";
+    labelSpan.textContent = label;
+    if (sub) {
+      const small = document.createElement("small");
+      small.textContent = sub;
+      labelSpan.appendChild(small);
+    }
+    const valueSpan = document.createElement("span");
+    valueSpan.className = "bd-value";
+    valueSpan.textContent = valueText;
+    li.appendChild(labelSpan);
+    li.appendChild(valueSpan);
+    return li;
+  }
+
+  // ---------------------------------------------------------------------
+  // Core render
+  // ---------------------------------------------------------------------
+
+  function render() {
+    const enterpriseScale = enterpriseToggle.checked;
+    const users = enterpriseScale ? ENTERPRISE_USER_THRESHOLD : parseInt(usersSlider.value, 10);
+
+    usersSlider.disabled = enterpriseScale;
+    usersSlider.style.setProperty("--fill", (parseInt(usersSlider.value, 10) - 1) / (1000 - 1) * 100 + "%");
+    usersValueLabel.textContent = enterpriseScale ? "1,000+ users" : users.toLocaleString("en-US") + (users === 1 ? " user" : " users");
+
+    const numApps = Math.max(0, parseInt(appsInput.value, 10) || 0);
+    appsValueLabel.textContent = numApps + (numApps === 1 ? " app" : " apps");
+
+    const complexity = getComplexity();
+    const support = getSupport();
+    const compliance = complianceToggle.checked;
+
+    const contactSalesMode = enterpriseScale;
+
+    // ---- Subscription math ----
+    const tier = baseTierFor(users);
+    planTierBadge.textContent = tier.name;
+
+    let subLow = 0, subHigh = 0;
+    if (!contactSalesMode) {
+      const rate = perUserRate(users);
+      const rawLow = users * rate.low;
+      const rawHigh = users * rate.high;
+      const floor = tier.floor;
+      subLow = floor != null ? Math.max(floor, rawLow) : rawLow;
+      subHigh = floor != null ? Math.max(floor, rawHigh) : rawHigh;
+    }
+
+    const upliftPct = SUPPORT_UPLIFT[support];
+    const supportLow = subLow * upliftPct;
+    const supportHigh = subHigh * upliftPct;
+
+    const complianceLow = compliance ? COMPLIANCE_UPLIFT.low : 0;
+    const complianceHigh = compliance ? COMPLIANCE_UPLIFT.high : 0;
+
+    const monthlyTotalLow = subLow + supportLow + complianceLow;
+    const monthlyTotalHigh = subHigh + supportHigh + complianceHigh;
+
+    // ---- Render subscription card ----
+    breakdownList.innerHTML = "";
+
+    if (contactSalesMode) {
+      annualFigure.textContent = "Contact Sales";
+      annualFigure.classList.add("contact");
+      monthlyContext.textContent = "Custom pricing for 1,000+ seats";
+      breakdownList.appendChild(
+        bdRow("Per-user subscription", users.toLocaleString("en-US") + "+ users", "Custom")
+      );
+      breakdownList.appendChild(
+        bdRow(
+          "Support (" + capitalize(support) + ")",
+          support === "standard" ? "Included" : "+" + Math.round(upliftPct * 100) + "% uplift",
+          support === "standard" ? "$0" : "Custom"
+        )
+      );
+      if (compliance) {
+        breakdownList.appendChild(bdRow("Compliance add-on", "FedRAMP Mod. Equivalency", "Custom"));
+      }
+    } else {
+      annualFigure.classList.remove("contact");
+      annualFigure.textContent = range(monthlyTotalLow * 12, monthlyTotalHigh * 12);
+      monthlyContext.textContent = "≈ " + range(monthlyTotalLow, monthlyTotalHigh) + " / month";
+
+      breakdownList.appendChild(
+        bdRow("Per-user subscription", users.toLocaleString("en-US") + " users × platform rate", range(subLow, subHigh) + "/mo")
+      );
+      breakdownList.appendChild(
+        bdRow(
+          "Support (" + capitalize(support) + ")",
+          support === "standard" ? "Included, no uplift" : "+" + Math.round(upliftPct * 100) + "% of subscription",
+          support === "standard" ? "$0" : "+" + range(supportLow, supportHigh) + "/mo"
+        )
+      );
+      if (compliance) {
+        breakdownList.appendChild(
+          bdRow("Compliance add-on", "FedRAMP Mod. Equivalency-related", "+" + range(complianceLow, complianceHigh) + "/mo")
+        );
+      }
+      breakdownList.appendChild(
+        bdRow("Monthly total", null, range(monthlyTotalLow, monthlyTotalHigh), true)
+      );
+    }
+
+    // ---- One-time cost math (always computable, independent of seat count) ----
+    const appCost = APP_COST[complexity];
+    const implCost = IMPLEMENTATION_COST[complexity];
+
+    const appsLow = numApps * appCost.low;
+    const appsHigh = numApps * appCost.high;
+    const oneTimeLow = implCost.low + appsLow;
+    const oneTimeHigh = implCost.high + appsHigh;
+
+    onetimeFigure.textContent = range(oneTimeLow, oneTimeHigh, { plus: implCost.plus });
+
+    onetimeList.innerHTML = "";
+    onetimeList.appendChild(
+      bdRow("Implementation & onboarding", capitalize(complexity) + " complexity", range(implCost.low, implCost.high, { plus: implCost.plus }))
+    );
+    onetimeList.appendChild(
+      bdRow("Custom app builds", numApps + " app" + (numApps === 1 ? "" : "s") + " × " + capitalize(complexity), numApps > 0 ? range(appsLow, appsHigh) : "$0")
+    );
+  }
+
+  function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  // ---------------------------------------------------------------------
+  // Wiring
+  // ---------------------------------------------------------------------
+
+  usersSlider.addEventListener("input", render);
+  enterpriseToggle.addEventListener("change", render);
+
+  function setApps(v) {
+    v = Math.max(0, Math.min(200, v || 0));
+    appsInput.value = v;
+    render();
+  }
+  appsInput.addEventListener("input", () => setApps(parseInt(appsInput.value, 10)));
+  appsMinus.addEventListener("click", () => setApps(parseInt(appsInput.value, 10) - 1));
+  appsPlus.addEventListener("click", () => setApps(parseInt(appsInput.value, 10) + 1));
+
+  document.querySelectorAll('input[name="complexity"]').forEach((el) => el.addEventListener("change", render));
+  document.querySelectorAll('input[name="support"]').forEach((el) => el.addEventListener("change", render));
+  complianceToggle.addEventListener("change", render);
+
+  ctaBtn.addEventListener("click", () => {
+    ctaBtn.textContent = "Thanks — a TrackVia specialist will follow up";
+    ctaBtn.disabled = true;
+    ctaBtn.style.opacity = "0.75";
+    ctaBtn.style.cursor = "default";
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
