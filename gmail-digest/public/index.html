@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gmail Digest</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <h1>Gmail Digest</h1>
+        <div id="connection" class="connection">
+          <span id="connectionStatus" class="status-dot"></span>
+          <span id="connectionLabel">Checking connection…</span>
+          <button id="connectBtn" class="btn btn-primary" hidden>Connect Gmail</button>
+          <button id="disconnectBtn" class="btn btn-ghost" hidden>Disconnect</button>
+        </div>
+      </header>
+
+      <section id="controls" class="controls" hidden>
+        <label for="daysSelect">Scan the last</label>
+        <select id="daysSelect">
+          <option value="1">1 day</option>
+          <option value="3">3 days</option>
+          <option value="7" selected>7 days</option>
+          <option value="14">14 days</option>
+          <option value="30">30 days</option>
+        </select>
+        <button id="scanBtn" class="btn btn-primary">Scan Inbox</button>
+      </section>
+
+      <section id="results" class="results" hidden>
+        <div class="summary-card">
+          <h2>Overview</h2>
+          <p id="overallSummary"></p>
+          <p id="threadCount" class="muted"></p>
+        </div>
+
+        <div class="section">
+          <h2>Needs your response</h2>
+          <div id="needsResponseList" class="card-list"></div>
+        </div>
+
+        <div class="section">
+          <h2>FYI — no action needed</h2>
+          <div id="fyiList" class="card-list"></div>
+        </div>
+      </section>
+
+      <div id="loading" class="loading" hidden>Scanning your inbox and asking Claude to make sense of it…</div>
+      <div id="errorBox" class="error" hidden></div>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>

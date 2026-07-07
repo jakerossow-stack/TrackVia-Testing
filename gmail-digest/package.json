@@ -1,0 +1,18 @@
+{
+  "name": "gmail-digest",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Scans your Gmail inbox and uses Claude to summarize it and flag emails that need a response.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "googleapis": "^144.0.0"
+  }
+}
